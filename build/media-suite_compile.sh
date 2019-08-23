@@ -569,6 +569,7 @@ _check=(libFLAC{,++}.{,l}a flac{,++}.pc)
 [[ $standalone = y ]] && _check+=(bin-audio/flac.exe)
 if [[ $flac = y ]] && do_vcs "https://github.com/xiph/flac.git"; then
     do_pacman_install libogg
+	do_patch https://gist.githubusercontent.com/moisesmcardona/4fa1fa47ee829a0f11c08fd83410075a/raw/a99ad779cfa001ceb216196fa01c4b3d7da15d3e/flac-pr-52-with-bugfix
     do_autogen
     if [[ $standalone = y ]]; then
         _check+=(bin-audio/metaflac.exe)
