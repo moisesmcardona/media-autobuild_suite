@@ -1661,7 +1661,7 @@ if [[ $vvc = y ]] &&
     _notrequired="true"
     # install to own dir because the binaries' names are too generic
     do_cmakeinstall -DCMAKE_INSTALL_BINDIR="$LOCALDESTDIR"/bin-video/vvc \
-        -DBUILD_STATIC=on -DSET_ENABLE_SPLIT_PARALLELISM=ON -DENABLE_SPLIT_PARALLELISM=ON
+        -DBUILD_STATIC=on -DSET_ENABLE_SPLIT_PARALLELISM=ON -DENABLE_SPLIT_PARALLELISM=OFF
     do_checkIfExist
     unset _notrequired
 fi
@@ -1747,6 +1747,27 @@ if [[ $ffmpeg != "no" ]]; then
     [[ $ffmpegUpdate = y ]] && enabled_any lib{aom,tesseract,vmaf,x265,vpx} &&
         _deps=(lib{aom,tesseract,vmaf,x265,vpx}.a)
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
+
+        # See issue https://github.com/OpenVisualCloud/SVT-AV1/issues/567 for the reasons behind the follow codeblock:
+        # start of SVT-AV1 temporary measures
+        if enabled libsvtav1 && enabled libsvthevc; then
+            do_print_progress "Until SVT-AV1 issues a fix, libsvtav1 must be disabled while libsvthevc is enabled."
+            do_removeOption --enable-libsvtav1
+        fi
+        if enabled libsvtav1; then
+            if enabled libaom && enabled libopencore-amrwb; then
+                do_print_progress "Until SVT-AV1 issues a fix, libaom & libopencore-amrwb must be disabled while libsvtav1 is enabled."
+                do_removeOption --enable-libaom
+                do_removeOption --enable-libopencore-amrwb
+            elif enabled libaom; then
+                do_print_progress "Until SVT-AV1 issues a fix, libaom must be disabled while libsvtav1 is enabled."
+                do_removeOption --enable-libaom
+            elif enabled libopencore-amrwb; then
+                do_print_progress "Until SVT-AV1 issues a fix, libopencore-amrwb must be disabled while libsvtav1 is enabled."
+                do_removeOption --enable-libopencore-amrwb
+            fi
+        fi
+        # end of SVT-AV1 temporary measures
 
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
