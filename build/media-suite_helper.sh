@@ -1182,6 +1182,8 @@ do_cmake() {
 
     local PKG_CONFIG="$LOCALDESTDIR/bin/ab-pkg-config-static.bat"
     [[ -z $skip_build_dir ]] && create_build_dir "$cmake_build_dir"
+    # use this array to pass additional parameters to cmake
+    local cmake_extras=()
     extra_script pre cmake
     [[ -f "$(get_first_subdir)/do_not_reconfigure" ]] &&
         return
@@ -1189,7 +1191,7 @@ do_cmake() {
     log "cmake" cmake "$root" -G Ninja -DBUILD_SHARED_LIBS=off \
         -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" \
         -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DUNIX=on \
-        -DCMAKE_BUILD_TYPE=Release $bindir "${cmake_extras[@]}" "$@"
+        -DCMAKE_BUILD_TYPE=Release $bindir "$@" "${cmake_extras[@]}"
     extra_script post cmake
     unset cmake_extras
 }
@@ -1226,18 +1228,37 @@ do_meson() {
     shift 1
 
     create_build_dir
+    # use this array to pass additional parameters to meson
+    local meson_extras=()
     extra_script pre meson
+    [[ -f "$(get_first_subdir)/do_not_reconfigure" ]] &&
+        return
     # shellcheck disable=SC2086
     PKG_CONFIG=pkg-config CC=gcc CXX=g++ \
         log "meson" meson "$root" --default-library=static --buildtype=release \
-        --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@"
+        --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}"
     extra_script post meson
+    unset meson_extras
 }
 
 do_mesoninstall() {
     do_meson "$@"
     do_ninja
     do_ninjainstall
+}
+
+do_rust() {
+    log "rust.update" "$RUSTUP_HOME/bin/cargo.exe" update
+    # use this array to pass additional parameters to cargo
+    local rust_extras=()
+    extra_script pre rust
+    [[ -f "$(get_first_subdir)/do_not_reconfigure" ]] &&
+        return
+    log "rust.build" "$RUSTUP_HOME/bin/cargo.exe" build --release \
+        --target="$CARCH"-pc-windows-gnu \
+        --jobs="$cpuCount" "$@" "${rust_extras[@]}"
+    extra_script post rust
+    unset rust_extras
 }
 
 compilation_fail() {
@@ -1952,15 +1973,6 @@ compare_with_zeranoe() {
     printf '\n'
 }
 
-do_rust() {
-    log "update" "$RUSTUP_HOME/bin/cargo.exe" update
-    extra_script pre rust
-    log "build" "$RUSTUP_HOME/bin/cargo.exe" build --release \
-        --target="$CARCH"-pc-windows-gnu \
-        --jobs="$cpuCount" "$@"
-    extra_script post rust
-}
-
 fix_libtiff_pc() {
     pc_exists libtiff-4 || return
     local _pkgconfLoc
@@ -2053,7 +2065,7 @@ extra_script() {
     local commandname="$2"
     local vcsFolder="${REPO_DIR%-*}"
     vcsFolder="${vcsFolder#*build/}"
-    if [[ $commandname =~ ^(make|meson|ninja)$ ]] &&
+    if [[ $commandname =~ ^(make|ninja)$ ]] &&
         type "_${stage}_build" > /dev/null 2>&1; then
         pushd "${REPO_DIR}" > /dev/null || true
         do_print_progress "Running ${stage} build from ${vcsFolder}_extra.sh"
@@ -2147,11 +2159,57 @@ create_extra_skeleton() {
 # Alternatively, you can use "touch recompile" for a similar effect.
 #touch custom_updated
 
+# Commands to run before and after running cmake (do_cmake)
+_pre_cmake(){
+    # Installs libwebp
+    #do_pacman_install libwebp
+    # Downloads the patch and then applies the patch
+    #do_patch "https://gist.githubusercontent.com/1480c1/9fa9292afedadcea2b3a3e067e96dca2/raw/50a3ed39543d3cf21160f9ad38df45d9843d8dc5/0001-Example-patch-for-learning-purpose.patch"
+    # Change directory to the build folder
+    #cd_safe "build-${bits}"
+
+    # Add additional options to suite's cmake execution
+    #cmake_extras=(-DENABLE_SWEET_BUT_BROKEN_FEATURE=on)
+
+    # To bypass the suite's cmake execution completely, create a do_not_configure file in the repository root:
+    #touch "$(get_first_subdir)/do_not_reconfigure"
+
+    true
+}
+
+_post_cmake(){
+    # Run cmake directly with custom options. $LOCALDESTDIR refers to local64 or local32
+    #cmake .. -G"Ninja" -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" \
+    #    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang \
+    #    -DBUILD_SHARED_LIBS=off -DENABLE_TOOLS=off
+    true
+}
+
 # Runs before and after building rust packages (do_rust)
 _pre_rust() {
+    # Add additional options to suite's rust (cargo) execution
+    #rust_extras=(--no-default-features --features=binaries)
+
+    # To bypass the suite's cargo execution completely, create a do_not_configure file in the repository root:
+    #touch "$(get_first_subdir)/do_not_reconfigure"
+
     true
 }
 _post_rust() {
+    true
+}
+
+# Runs before and after running meson (do_meson)
+_pre_meson() {
+    # Add additional options to suite's rust (cargo) execution
+    #meson_extras=(-Denable_tools=true)
+
+    # To bypass the suite's meson execution completely, create a do_not_configure file in the repository root:
+    #touch "$(get_first_subdir)/do_not_reconfigure"
+
+    true
+}
+_post_meson() {
     true
 }
 
@@ -2192,30 +2250,6 @@ _post_configure(){
     true
 }
 
-# Commands to run before and after running cmake (do_cmake)
-_pre_cmake(){
-    true
-    # Installs libwebp
-    #do_pacman_install libwebp
-    # Downloads the patch and then applies the patch
-    #do_patch "https://gist.githubusercontent.com/1480c1/9fa9292afedadcea2b3a3e067e96dca2/raw/50a3ed39543d3cf21160f9ad38df45d9843d8dc5/0001-Example-patch-for-learning-purpose.patch"
-    # Change directory to the build folder
-    #cd_safe "build-${bits}"
-    # Add additional options to suite's cmake execution
-    #cmake_extras=(-DENABLE_SWEET_BUT_BROKEN_FEATURE=on)
-}
-
-_post_cmake(){
-    true
-    # Run cmake directly with custom options. $LOCALDESTDIR refers to local64 or local32
-    #cmake .. -G"Ninja" -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" \
-    #    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang \
-    #    -DBUILD_SHARED_LIBS=off -DENABLE_TOOLS=off
-    # You can also do the same thing in _pre_cmake after creating a 'do_not_reconfigure'
-    # file in the source directory. This way you can avoid running cmake twice.
-    #touch "$(get_first_subdir)/do_not_reconfigure"
-}
-
 # Runs before and after runing make (do_make)
 _pre_make(){
     true
@@ -2227,14 +2261,6 @@ _post_make(){
     # Don't clean the build folder on each successive run.
     # This is for if you want to keep the current build folder as is and just recompile only.
     #touch "$(get_first_subdir)/do_not_clean"
-}
-
-# Runs before and after running meson (do_meson)
-_pre_meson() {
-    true
-}
-_post_meson() {
-    true
 }
 
 # Runs before and after running ninja (do_ninja)
