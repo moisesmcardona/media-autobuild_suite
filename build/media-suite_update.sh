@@ -81,14 +81,14 @@ fi # end suite update
 # packet update system
 # --------------------------------------------------
 
-{ /usr/bin/pacman-key -f EFD16019AE4FF531 || pacman-key -r EFD16019AE4FF531; } > /dev/null
+{ /usr/bin/pacman-key -f EFD16019AE4FF531 || pacman-key -r EFD16019AE4FF531 --keyserver 'hkp://keys.gnupg.net/'; } > /dev/null
 { /usr/bin/pacman-key --list-sigs AE4FF531 | grep -q pacman@localhost || pacman-key --lsign AE4FF531; } > /dev/null
 
 #always kill gpg-agent
-gpgconf --kill gpg-agent
+command -v gpgconf.exe && gpgconf --kill gpg-agent
 
 # for some people the signature is broken
-/usr/bin/grep -q Optional /etc/pacman.d/abrepo.conf ||
+test -f /etc/pacman.d/abrepo.conf && /usr/bin/grep -q Optional /etc/pacman.d/abrepo.conf ||
     printf 'Server = %s\nSigLevel = Optional\n' \
         'https://i.fsbn.eu/abrepo/' > /etc/pacman.d/abrepo.conf
 
