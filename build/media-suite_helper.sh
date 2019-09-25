@@ -39,16 +39,22 @@ do_simple_print() {
 }
 
 do_print_status() {
+    local _prefix _prefixpad=0
+    if [[ $1 == prefix ]]; then
+        _prefix="$2" && shift 2
+        _prefixpad=2
+    fi
     local name="$1 "
     local color="$2"
     local status="$3"
     local pad
     printf -v pad ".%.0s" $(seq -s ' ' 1 $ncols)
     if [[ $timeStamp == y ]]; then
-        printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s %s [%s]\n' -1 "${bold}$name${reset}" \
-            "${pad:0:$((ncols - ${#name} - ${#status} - 12))}" "${color}${status}${reset}"
+        printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s%s %s [%s]\n' -1 "$_prefix" "${bold}$name${reset}" \
+            "${pad:0:$((ncols - _prefixpad - ${#name} - ${#status} - 12))}" "${color}${status}${reset}"
     else
-        printf '%s %s [%s]\n' "${bold}$name${reset}" "${pad:0:$((ncols - ${#name} - ${#status} - 3))}" "${color}${status}${reset}"
+        printf '%s%s %s [%s]\n' "$_prefix" "${bold}$name${reset}" \
+            "${pad:0:$((ncols - _prefixpad - ${#name} - ${#status} - 2))}" "${color}${status}${reset}"
     fi
 }
 
@@ -297,7 +303,7 @@ do_vcs() {
         do_print_status "${vcsFolder} ${vcsType}" "$green" "Up-to-date"
         if [[ -f recompile ]]; then
             do_print_status "┌ ${vcsFolder} ${vcsType}" "$orange" "Forcing recompile"
-            do_print_status "${bold}├${reset} Found recompile flag" "$orange" "Recompiling"
+            do_print_status prefix "${bold}├${reset} " "Found recompile flag" "$orange" "Recompiling"
         else
             return 1
         fi
@@ -333,14 +339,14 @@ check_hash() {
 
 # get wget download
 do_wget() {
-    local nocd norm quiet hash notmodified
+    local nocd=false norm=false quiet=false notmodified=false hash
     while true; do
         case $1 in
-        -c) nocd=nocd && shift ;;
-        -r) norm=y && shift ;;
-        -q) quiet=y && shift ;;
+        -c) nocd=true && shift ;;
+        -r) norm=true && shift ;;
+        -q) quiet=true && shift ;;
         -h) hash="$2" && shift 2 ;;
-        -z) notmodified=y && shift ;;
+        -z) notmodified=true && shift ;;
         --)
             shift
             break
@@ -348,52 +354,65 @@ do_wget() {
         *) break ;;
         esac
     done
-    local url="$1" archive="$2" dirName="$3" response_code curlcmds tries=1
+    local url="$1" archive="$2" dirName="$3" response_code=000 curlcmds=("${curl_opts[@]}") tries=1 temp_file
     if [[ -z $archive ]]; then
         # remove arguments and filepath
         archive=${url%%\?*}
         archive=${archive##*/}
     fi
-    [[ ! $dirName ]] && dirName=$(guess_dirname "$archive")
-
-    [[ ! $nocd ]] && cd_safe "$LOCALBUILDDIR"
-    if ! check_hash "$archive" "$hash"; then
-        curlcmds=("${curl_opts[@]}")
-        [[ $notmodified && -f $archive ]] && curlcmds+=(-z "$archive" -R)
-        [[ $hash ]] && tries=3
-        while [[ $tries -gt 0 ]]; do
-            response_code="$("${curlcmds[@]}" -w "%{response_code}" -o "$archive" "$url")"
-            ((tries -= 1))
-
-            if [[ $response_code == "200" || $response_code == "226" ]]; then
-                [[ $quiet ]] || do_print_status "┌ ${dirName:-$archive}" "$orange" "Downloaded"
-            elif [[ $response_code == "304" ]]; then
-                [[ $quiet ]] || do_print_status "┌ ${dirName:-$archive}" "$orange" "File up-to-date"
-            fi
-            if check_hash "$archive" "$hash"; then
-                tries=0
-            else
-                rm -f "$archive"
-            fi
-        done
-        if [[ $response_code -gt 400 || $response_code == "000" ]]; then
-            if [[ -f $archive ]]; then
-                echo -e "${orange}${archive}${reset}"
-                echo -e '\tFile not found online. Using local copy.'
-            else
-                do_print_status "└ ${dirName:-$archive}" "$red" "Failed"
-                echo "Error $response_code while downloading $url"
-                echo "<Ctrl+c> to cancel build or <Enter> to continue"
-                do_prompt "if you're sure nothing depends on it."
-                return 1
-            fi
-        fi
-    else
-        [[ $quiet ]] || do_print_status "${bold}├${reset} ${dirName:-$archive}" "$green" "File up-to-date"
+    if [[ -f $url ]]; then
+        return 1
     fi
-    [[ $norm ]] || add_to_remove "$(pwd)/$archive"
+    archive=${archive:-"$(/usr/bin/curl -sI "$url" | grep -Eo 'filename=.*$' | sed 's/filename=//')"}
+    [[ -z $dirName ]] && dirName=$(guess_dirname "$archive")
+
+    $nocd || cd_safe "$LOCALBUILDDIR"
+    $notmodified && [[ -f $archive ]] && curlcmds+=(-z "$archive" -R)
+    [[ $hash ]] && tries=3
+
+    while [[ $tries -gt 0 ]]; do
+        temp_file=$(mktemp)
+        response_code=$("${curlcmds[@]}" -w "%{http_code}" -o "$temp_file" "$url")
+
+        if diff -q "$archive" "$temp_file" > /dev/null 2>&1 ||
+            [[ -n $hash ]] && check_hash "$archive" "$hash"; then
+            $quiet || do_print_status prefix "${bold}├${reset} " "${dirName:-$archive}" "$green" "File up-to-date"
+            rm -f "$temp_file"
+            break
+        fi
+
+        ((tries -= 1))
+
+        case $response_code in
+        2**)
+            $quiet || do_print_status "┌ ${dirName:-$archive}" "$orange" "Downloaded"
+            check_hash "$temp_file" "$hash" && cp -f "$temp_file" "$archive"
+            rm -f "$temp_file"
+            break
+            ;;
+        304)
+            $quiet || do_print_status "┌ ${dirName:-$archive}" "$orange" "File up-to-date"
+            rm -f "$temp_file"
+            break
+            ;;
+        esac
+
+        if check_hash "$archive" "$hash"; then
+            printf '%b\n' "${orange}${archive}${reset}" \
+                '\tFile not found online. Using local copy.'
+        else
+            do_print_status "└ ${dirName:-$archive}" "$red" "Failed"
+            printf '%s\n' "Error $response_code while downloading $url" \
+                "<Ctrl+c> to cancel build or <Enter> to continue"
+            do_prompt "if you're sure nothing depends on it."
+            rm -f "$temp_file"
+            return 1
+        fi
+    done
+
+    $norm || add_to_remove "$(pwd)/$archive"
     do_extract "$archive" "$dirName"
-    [[ ! $norm && $dirName && ! $nocd ]] && add_to_remove
+    ! $norm && [[ -n $dirName ]] && ! $nocd && add_to_remove
     [[ -z $response_code || $response_code != "304" ]] && return 0
 }
 
@@ -425,7 +444,7 @@ real_extract() {
 }
 
 do_extract() {
-    local nocd="${nocd:-}"
+    local nocd="${nocd:-false}"
     local archive="$1" dirName="$2"
     # accepted: zip, 7z, tar, tar.gz, tar.bz2 and tar.xz
     [[ -z $dirName ]] && dirName=$(guess_dirname "$archive")
@@ -438,13 +457,13 @@ do_extract() {
             rm -rf "$dirName"
         fi
     elif [[ -d $dirName ]]; then
-        [[ $nocd ]] || cd_safe "$dirName"
+        $nocd || cd_safe "$dirName"
         return 0
     elif ! expr "$archive" : '.\+\(tar\(\.\(gz\|bz2\|xz\)\)\?\|7z\|zip\)$' > /dev/null; then
         return 0
     fi
     log "extract" real_extract "$archive" "$dirName"
-    [[ $nocd ]] || cd_safe "$dirName"
+    $nocd || cd_safe "$dirName"
 }
 
 do_wget_sf() {
@@ -537,30 +556,42 @@ do_zipman() {
 do_checkIfExist() {
     local packetName
     packetName="$(get_first_subdir)"
+    local packageDir="${LOCALBUILDDIR}/${packetName}"
+    local buildSuccessFile="${packageDir}/build_successful${bits}"
     local dry="${dry:-n}"
-    local check=("${_check[@]}")
+    local check=()
+    if [[ -n $1 ]]; then
+        check+=("$@")
+    else
+        check+=("${_check[@]}")
+        unset _check
+    fi
+    unset_extra_script
     [[ -z ${check[*]} ]] && echo "No files to check" && exit 1
     if [[ $dry == y ]]; then
         files_exist -v -s "${check[@]}"
+        return $?
+    fi
+    if files_exist -v "${check[@]}"; then
+        [[ $stripping == y ]] && do_strip "${check[@]}"
+        [[ $packing == y ]] && do_pack "${check[@]}"
+        do_print_status "└ $packetName" "$blue" "Updated"
+        [[ $build32 == yes || $build64 == yes ]] && [[ -d $packageDir ]] &&
+            touch "$buildSuccessFile"
     else
-        if files_exist -v "${check[@]}"; then
-            [[ $stripping == y ]] && do_strip "${check[@]}"
-            [[ $packing == y ]] && do_pack "${check[@]}"
-            do_print_status "└ $packetName" "$blue" "Updated"
-            [[ $build32 == yes || $build64 == yes ]] && [[ -d "$LOCALBUILDDIR/$packetName" ]] &&
-                touch "$LOCALBUILDDIR/$packetName/build_successful$bits"
+        [[ $build32 == yes || $build64 == yes ]] && [[ -d $packageDir ]] &&
+            rm -f "$buildSuccessFile"
+        do_print_status "└ $packetName" "$red" "Failed"
+        if [[ $_notrequired ]]; then
+            printf '%s\n' \
+                "$orange"'Package failed to build, but is not required; proceeding with compilation.'"$reset"
         else
-            [[ $build32 == yes || $build64 == yes ]] && [[ -d "$LOCALBUILDDIR/$packetName" ]] &&
-                rm -f "$LOCALBUILDDIR/$packetName/build_successful$bits"
-            do_print_status "└ $packetName" "$red" "Failed"
-            echo
-            echo "Try deleting '$LOCALBUILDDIR/$packetName' and start the script again."
-            echo "If you're sure there are no dependencies <Enter> to continue building."
+            printf '%s\n' \
+                '' "Try deleting '$packageDir' and start the script again." \
+                'If you are sure there are no dependencies, <Enter> to continue building.'
             do_prompt "Close this window if you wish to stop building."
         fi
     fi
-    unset _check
-    unset_extra_script
 }
 
 file_installed() {
@@ -608,7 +639,7 @@ files_exist() {
     [[ $list ]] && verbose= && soft=y
     for opt; do
         if file=$(file_installed "$opt"); then
-            [[ $verbose && $soft ]] && do_print_status "${bold}├${reset} $file" "${green}" "Found"
+            [[ $verbose && $soft ]] && do_print_status "├ $file" "${green}" "Found"
             if [[ $list ]]; then
                 if [[ $ignorebinaries && $file =~ .(exe|com)$ ]]; then
                     continue
@@ -616,7 +647,7 @@ files_exist() {
                 printf "%s%b" "$file" "$term"
             fi
         else
-            [[ $verbose ]] && do_print_status "${bold}├${reset} $file" "${red}" "Not found"
+            [[ $verbose ]] && do_print_status prefix "${bold}├${reset} " "$file" "${red}" "Not found"
             [[ ! $soft ]] && return 1
         fi
     done
@@ -964,7 +995,7 @@ do_getMpvConfig() {
         IFS=$'\n' read -d '' -r -a MPV_TEMP_OPTS < <(do_readoptionsfile "$LOCALBUILDDIR/mpv_options.txt")
     fi
     do_removeOption MPV_TEMP_OPTS \
-        "--(en|dis)able-(vapoursynth-lazy|libguess|static-build|enable-gpl3|egl-angle-lib|encoding|crossc)"
+        "--(en|dis)able-(vapoursynth-lazy|libguess|static-build|enable-gpl3|egl-angle-lib|encoding|crossc|dvdread)"
     for opt in "${MPV_TEMP_OPTS[@]}"; do
         [[ -n $opt ]] && MPV_OPTS+=("$opt")
     done
@@ -1080,21 +1111,19 @@ do_removeOptions() {
 do_patch() {
     local binarypatch="--binary"
     case $1 in -p) binarypatch="" && shift ;; esac
-    local patch=${1%% *}       # Location or link to patch.
-    local am=$2                # Use git am to apply patch. Use with .patch files
-    local strip=${3:-1}        # Leading directories to strip. "patch -p${strip}"
+    local patch="${1%% *}"     # Location or link to patch.
     local patchName="${1##* }" # Basename of file. (test-diff-files.diff)
+    local am=false             # Use git am to apply patch. Use with .patch files
+    local strip=${3:-1}        # Leading directories to strip. "patch -p${strip}"
     [[ $patchName == "$patch" ]] && patchName="${patch##*/}"
+    [[ $2 == am ]] && am=true
 
-    if [[ -z $patchName ]]; then
-        # hack for URLs without filename
-        patchName="$(/usr/bin/curl -sI "$patch" | grep -Pio '(?<=filename=)(.+)')"
-        if [[ -z $patchName ]]; then
-            echo -e "${red}Failed to apply patch '$patch'${reset}"
-            echo -e "${red}Patch without filename, ignoring. Specify an explicit filename.${reset}"
-            return 1
-        fi
-    fi
+    # hack for URLs without filename
+    patchName=${patchName:-"$(/usr/bin/curl -sI "$patch" | grep -Eo 'filename=.*$' | sed 's/filename=//')"}
+    [[ -z $patchName ]] &&
+        printf '%b\n' "${red}Failed to apply patch '$patch'" \
+            "Patch without filename, ignoring. Specify an explicit filename.${reset}" &&
+        return 1
 
     # Just don't. Make a fork or use the suite's directory as the root for
     # your diffs or manually edit the scripts if you are trying to modify
@@ -1105,43 +1134,35 @@ do_patch() {
         do_exit_prompt "Running patches in the build folder is not supported.
         Please make a patch for individual folders or modify the script directly"
 
-    if [[ ${patch:0:4} == "http" ]] || [[ ${patch:0:3} == "ftp" ]]; then
-        # Filter out patches that would require curl
-        do_wget -c -r -q "$patch" "$patchName"
-    elif [[ -f $patch ]]; then
-        # Check if the patch is a local patch and copy it to the current dir
-        patch="$(realpath "$patch")" # Resolve fullpatch
-        [[ ${patch%/*} != "$PWD" ]] &&
-            cp -f "$patch" "$patchName" > /dev/null 2>&1
-    else
-        # Fall through option if the patch is from some other protocol
-        # I don't know why anyone would use this but just in case.
-        do_wget -c -r -q "$patch" "$patchName"
+    # Filter out patches that would require curl; else
+    # check if the patch is a local patch and copy it to the current dir
+    if ! do_wget -c -r -q "$patch" "$patchName" && [[ -f $patch ]]; then
+        patch="$(
+            cd_safe "$(dirname "$patch")"
+            printf '%s' "$(pwd -P)" '/' "$(basename -- "$patch")"
+
+        )" # Resolve fullpath
+        [[ ${patch%/*} != "$PWD" ]] && cp -f "$patch" "$patchName" > /dev/null 2>&1
     fi
 
     if [[ -f $patchName ]]; then
-        if [[ $am == "am" ]]; then
-            if ! git am -q --ignore-whitespace --no-gpg-sign "$patchName" > /dev/null 2>&1; then
-                git am -q --abort
-                echo -e "${orange}${patchName}${reset}"
-                echo -e "\\tPatch couldn't be applied with 'git am'. Continuing without patching."
-                return 1
-            fi
+        if $am; then
+            git apply --check --ignore-space-change --ignore-whitespace "$patchName" > /dev/null 2>&1 &&
+                git am -q --ignore-whitespace --no-gpg-sign "$patchName" > /dev/null 2>&1 &&
+                return 0
+            git am -q --abort > /dev/null 2>&1
         else
-            if patch --dry-run $binarypatch -s -N -p"$strip" -i "$patchName" > /dev/null 2>&1; then
-                patch $binarypatch -s -N -p"$strip" -i "$patchName"
-            else
-                echo -e "${orange}${patchName}${reset}"
-                echo -e "\\tPatch couldn't be applied with 'patch'. Continuing without patching."
-                return 1
-            fi
+            patch --dry-run $binarypatch -s -N -p"$strip" -i "$patchName" > /dev/null 2>&1 &&
+                patch $binarypatch -s -N -p"$strip" -i "$patchName" &&
+                return 0
         fi
+        printf '%b\n' "${orange}${patchName}${reset}" \
+            '\tPatch could not be applied with `'"$($am && echo "git am" || echo "patch")"'`. Continuing without patching.'
     else
-        echo -e "${orange}${patchName}${reset}"
-        echo -e '\tPatch not found anywhere. Continuing without patching.'
-        return 1
+        printf '%b\n' "${orange}${patchName}${reset}" \
+            '\tPatch not found anywhere. Continuing without patching.'
     fi
-    return 0
+    return 1
 }
 
 do_custom_patches() {
@@ -1173,6 +1194,9 @@ do_cmake() {
         *)
             if [[ -d "./$1" ]]; then
                 [[ -n $skip_build_dir ]] && root="./$1" || root="../$1"
+                shift
+            elif [[ -d "../$1" ]]; then
+                root="../$1"
                 shift
             fi
             break
@@ -1234,7 +1258,7 @@ do_meson() {
     [[ -f "$(get_first_subdir)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    PKG_CONFIG=pkg-config CC=gcc CXX=g++ \
+    PKG_CONFIG=pkg-config CC=gcc.bat CXX=g++.bat \
         log "meson" meson "$root" --default-library=static --buildtype=release \
         --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}"
     extra_script post meson
@@ -1249,6 +1273,7 @@ do_mesoninstall() {
 
 do_rust() {
     log "rust.update" "$RUSTUP_HOME/bin/cargo.exe" update
+    command -v sccache > /dev/null 2>&1 && export RUSTC_WRAPPER=sccache
     # use this array to pass additional parameters to cargo
     local rust_extras=()
     extra_script pre rust
@@ -1268,7 +1293,7 @@ compilation_fail() {
     operation="$(echo "$reason" | tr '[:upper:]' '[:lower:]')"
     if [[ $_notrequired ]]; then
         if [[ $logging == y ]]; then
-            echo "Likely error:"
+            echo "Likely error (tail of the failed operation logfile):"
             tail "ab-suite.${operation}.log"
             echo "${red}$reason failed. Check $(pwd -W)/ab-suite.$operation.log${reset}"
         fi
@@ -1281,7 +1306,7 @@ compilation_fail() {
             exit
         else
             if [[ $logging == y ]]; then
-                echo "Likely error:"
+                echo "Likely error (tail of the failed operation logfile):"
                 tail "ab-suite.${operation}.log"
                 echo "${red}$reason failed. Check $(pwd -W)/ab-suite.$operation.log${reset}"
             fi
@@ -1354,16 +1379,34 @@ log() {
 }
 
 create_build_dir() {
-    local build_dir="build${1:+-$1}-$bits"
-    if [[ ! -f "$(get_first_subdir)/do_not_clean" ]]; then
-        if [[ "$(basename "$(pwd)")" == "$build_dir" ]]; then
-            rm -rf ./* && cd_safe ".."
-        elif [[ -d $build_dir ]] && ! rm -rf ./"$build_dir"; then
-            cd_safe "$build_dir" && rm -rf ./* && cd_safe ".."
-        fi
+    local print_build_dir=false nocd=${nocd:-false} norm=false build_root build_dir getoptopt OPTARG OPTIND
+    while getopts ":pcrC:" getoptopt; do
+        case $getoptopt in
+        p) print_build_dir=true ;;
+        c) nocd=true ;;
+        r) norm=true ;;
+        C) build_root="$OPTARG" ;;
+        \?)
+            echo "Invalid Option: -$OPTARG" 1>&2
+            return 1
+            ;;
+        :)
+            echo "Invalid option: $OPTARG requires an argument" 1>&2
+            return 1
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
+    build_dir="${build_root:+$build_root/}build${1:+-$1}-$bits"
+
+    if [[ -d $build_dir && ! -f $LOCALBUILDDIR/$(get_first_subdir)/do_not_clean ]]; then
+        $norm || rm -rf "$build_dir" ||
+            (cd_safe "$build_dir" && rm -rf ./*)
     fi
-    [[ ! -d $build_dir ]] && mkdir "$build_dir"
-    cd_safe "$build_dir"
+    [[ ! -d $build_dir ]] && mkdir -p "$build_dir"
+    $nocd || cd_safe "$build_dir"
+    $print_build_dir && printf '%s\n' "$build_dir"
 }
 
 get_external_opts() {
@@ -1397,7 +1440,7 @@ do_separate_conf() {
         config_path=".."
         create_build_dir
     fi
-    do_configure --{build,host,target}="$MINGW_CHOST" --prefix="$LOCALDESTDIR" --disable-shared --enable-static "$bindir" "$@"
+    do_configure --disable-shared --enable-static "$bindir" "$@"
 }
 
 do_separate_confmakeinstall() {
@@ -1411,7 +1454,7 @@ do_configure() {
     extra_script pre configure
     [[ -f "$(get_first_subdir)/do_not_reconfigure" ]] &&
         return
-    log "configure" ${config_path:-.}/configure "$@"
+    log "configure" ${config_path:-.}/configure --prefix="$LOCALDESTDIR" "$@"
     extra_script post configure
 }
 
@@ -1906,6 +1949,44 @@ EOF
         printf '%s\r\n' "@echo off" "" "bash $LOCALDESTDIR/bin/ab-pkg-config --static %*" > "$LOCALDESTDIR"/bin/ab-pkg-config-static.bat
 }
 
+create_ab_ccache() {
+    local bin
+    for bin in {$MINGW_CHOST-,}{gcc,g++} clang{,++} cc cpp c++; do
+        if [[ ! -f "$LOCALDESTDIR/bin/$bin.bat" ]] || ! "$LOCALDESTDIR/bin/$bin.bat" --help > /dev/null 2>&1; then
+            printf '%s\r\n' \
+                '@echo off >nul 2>&1' \
+                'rem() { "$@"; }' \
+                'rem test -f nul && rm nul' \
+                'rem ccache > /dev/null 2>&1' \
+                "rem test \$? -ne 127 && ccache $bin \"\$@\"" \
+                'rem exit $?' \
+                "$(cygpath -m "$MINGW_PREFIX/bin/ccache") $bin %*" \
+                'exit %ERRORLEVEL%' \
+                'goto :EOF' \
+                ':args' \
+                'if -%1-==-- (' \
+                '    exit /b' \
+                ')' \
+                'test -f %1' \
+                'if %ERRORLEVEL%==0 (' \
+                '    for /f "tokens=1 delims=" %%a in ("cygpath -m %1") do set "ARGS=%ARGS% %%a"' \
+                '    shift' \
+                ') else (' \
+                '    test -d %1' \
+                '    if %ERRORLEVEL%==0 (' \
+                '        for /f "tokens=1 delims=" %%a in ("cygpath -m %1") do set "ARGS=%ARGS% %%a"' \
+                '        shift' \
+                '    ) else (' \
+                '        set "ARGS=%ARGS% %1"' \
+                '        shift' \
+                '    )' \
+                ')' \
+                'goto :args' > "$LOCALDESTDIR/bin/$bin.bat"
+        fi
+        chmod +x "$LOCALDESTDIR/bin/$bin.bat"
+    done
+}
+
 create_cmake_toolchain() {
     local _win_path_LOCALDESTDIR _win_path_MINGW_PREFIX
     _win_path_LOCALDESTDIR="$(cygpath -m "$LOCALDESTDIR")"
@@ -1918,6 +1999,8 @@ create_cmake_toolchain() {
         "SET(CMAKE_PREFIX_PATH $_win_path_LOCALDESTDIR $_win_path_MINGW_PREFIX $_win_path_MINGW_PREFIX/$MINGW_CHOST)"
         "SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)"
         "SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)"
+        "SET(CMAKE_C_COMPILER $_win_path_LOCALDESTDIR/bin/gcc.bat)"
+        "SET(CMAKE_CXX_COMPILER $_win_path_LOCALDESTDIR/bin/g++.bat)"
     )
 
     [[ -f "$LOCALDESTDIR"/etc/toolchain.cmake ]] &&

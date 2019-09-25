@@ -74,7 +74,7 @@ set msyspackages=asciidoc autoconf automake-wrapper autogen bison diffstat dos2u
 intltool libtool patch python xmlto make zip unzip git subversion wget p7zip mercurial man-db ^
 gperf winpty texinfo gyp-git doxygen autoconf-archive itstool ruby mintty flex
 
-set mingwpackages=cmake dlfcn libpng gcc nasm pcre tools-git yasm ninja pkg-config meson
+set mingwpackages=cmake dlfcn libpng gcc nasm pcre tools-git yasm ninja pkg-config meson ccache
 
 :: built-ins
 set ffmpeg_options_builtin=--disable-autodetect amf bzlib cuda cuvid d3d11va dxva2 ^
@@ -103,19 +103,19 @@ set ffmpeg_options_full_shared=opencl opengl cuda-nvcc libnpp libopenh264
 :: built-ins
 set mpv_options_builtin=#cplayer #manpage-build #lua #javascript #libass ^
 #libbluray #uchardet #rubberband #lcms2 #libarchive #libavdevice ^
-#shaderc #spirv-cross #d3d11 #jpeg #vapoursynth
+#shaderc #spirv-cross #d3d11 #jpeg #vapoursynth #vulkan #libplacebo #d3d11
 
 :: overriden defaults
 set mpv_options_basic=--disable-debug-build "--lua=luajit"
 
 :: all supported options
-set mpv_options_full=dvdread dvdnav cdda #egl-angle #html-build ^
+set mpv_options_full=dvdnav cdda #egl-angle #html-build ^
 #pdf-build libmpv-shared openal
 
 set iniOptions=msys2Arch arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac ffmbc curl cyanrip2 redshift rav1e ^
-ripgrep dav1d vvc jq dssim avs2 timeStamp noMintty svthevc svtav1
+ripgrep dav1d vvc jq dssim avs2 timeStamp noMintty ccache svthevc svtav1 xvc
 
 set previousOptions=0
 set msys2ArchINI=0
@@ -236,7 +236,7 @@ if %standaloneINI%==0 (
     echo.
     echo -------------------------------------------------------------------------------
     echo -------------------------------------------------------------------------------
-     set /P buildstandalone="Build standalone binaries: "
+    set /P buildstandalone="Build standalone binaries: "
 ) else set buildstandalone=%standaloneINI%
 
 if "%buildstandalone%"=="" GOTO standalone
@@ -438,6 +438,28 @@ if %buildsvthevc%==1 set "svthevc=y"
 if %buildsvthevc%==2 set "svthevc=n"
 if %buildsvthevc% GTR 2 GOTO svthevc
 if %deleteINI%==1 echo.svthevc=^%buildsvthevc%>>%ini%
+
+:xvc
+if %xvcINI%==0 (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Build xvc? [HEVC and AV1 competitor]
+    echo. 1 = Yes
+    echo. 2 = No
+    echo.
+    echo. Any issues with this will be considered low-priority due to lack of
+    echo. potential stability
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildxvc="Build xvc: "
+) else set buildxvc=%xvcINI%
+
+if "%buildxvc%"=="" GOTO xvc
+if %buildxvc%==1 set "xvc=y"
+if %buildxvc%==2 set "xvc=n"
+if %buildxvc% GTR 2 GOTO xvc
+if %deleteINI%==1 echo.xvc=^%buildxvc%>>%ini%
 
 :vvc
 if %vvcINI%==0 (
@@ -1181,6 +1203,29 @@ if %timeStampF%==2 set "timeStamp=n"
 if %timeStampF% GTR 2 GOTO timeStamp
 if %deleteINI%==1 echo.timeStamp=^%timeStampF%>>%ini%
 
+:ccache
+if %ccacheINI%==0 (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Use ccache when compiling?
+    echo. Experimental.
+    echo. Speeds up rebuilds and recompilations, but requires the files to be
+    echo. compiled at least once before any effect is seen
+    echo. 1 = Yes
+    echo. 2 = No
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildwithccache="Use ccache: "
+) else set buildwithccache=%ccacheINI%
+
+if "%buildwithccache%"=="" GOTO ccache
+if %buildwithccache%==1 set "ccache=y"
+if %buildwithccache%==2 set "ccache=n"
+if %buildwithccache% GTR 2 GOTO ccache
+if %deleteINI%==1 echo.ccache=^%buildwithccache%>>%ini%
+
 :noMintty
 if %noMinttyINI%==0 (
     echo -------------------------------------------------------------------------------
@@ -1597,7 +1642,6 @@ cd %instdir%
 
 title MABSbat
 if %noMintty%==y cls
-for /f "tokens=2" %%P in ('tasklist /v ^|findstr MABSbat') do set ourPID=%%P
 
 if exist %build%\compilation_failed del %build%\compilation_failed
 if exist %build%\fail_comp del %build%\compilation_failed
@@ -1621,7 +1665,7 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 --logging=%logging% --bmx=%bmx% --standalone=%standalone% --aom=%aom% --faac=%faac% --ffmbc=%ffmbc% ^
 --curl=%curl% --cyanrip=%cyanrip% --redshift=%redshift% --rav1e=%rav1e% --ripgrep=%ripgrep% ^
 --dav1d=%dav1d% --vvc=%vvc% --jq=%jq% --dssim=%dssim% --avs2=%avs2% --timeStamp=%timeStamp% ^
---noMintty=%noMintty% --svthevc=%svthevc% --svtav1=%svtav1%
+--noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% --svtav1=%svtav1% --xvc=%xvc%
     set "msys2=%msys2%"
     set "noMintty=%noMintty%"
     if %build64%==yes ( set "MSYSTEM=MINGW64" ) else set "MSYSTEM=MINGW32"
@@ -1631,12 +1675,14 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 if %noMintty%==y (
     powershell -noprofile -executionpolicy bypass "%CD%\build\bash.ps1" -Bash "%CD%\%msys2%\usr\bin\bash.exe" ^
     -Logfile "%CD%\build\compile.log" -BashCommand \"/build/media-suite_compile.sh %compileArgs%\"
+    exit /B %ERRORLEVEL%
 ) else (
     if exist %CD%\build\compile.log del %CD%\build\compile.log
     start /I %CD%\%msys2%\usr\bin\mintty.exe -i /msys2.ico -t "media-autobuild_suite" ^
     --log 2>&1 %CD%\build\compile.log /bin/env MSYSTEM=%MSYSTEM% MSYS2_PATH_TYPE=inherit ^
     MSYS=%symlinkSupported% /usr/bin/bash ^
     --login /build/media-suite_compile.sh %compileArgs%
+    exit /B %ERRORLEVEL%
 )
 endlocal
 goto :EOF
@@ -1674,7 +1720,8 @@ goto :EOF
     echo.
     echo.alias dir='ls -la --color=auto'
     echo.alias ls='ls --color=auto'
-    echo.export CC=gcc
+    echo.export CC="ccache gcc"
+    echo.export CXX="ccache g++"
     echo.
     echo.CARCH="${MINGW_CHOST%%%%-*}"
     echo.CPATH="`cygpath -m $LOCALDESTDIR/include`;`cygpath -m $MINGW_PREFIX/include`"
@@ -1695,12 +1742,14 @@ goto :EOF
     echo.export DXSDK_DIR ACLOCAL_PATH PKG_CONFIG PKG_CONFIG_PATH CPPFLAGS CFLAGS CXXFLAGS LDFLAGS MSYSTEM
     echo.
     echo.export CARGO_HOME="/opt/cargo" RUSTUP_HOME="/opt/cargo"
+    echo.export SCCACHE_DIR="$HOME/.sccache"
+    echo.export CCACHE_DIR="$HOME/.ccache"
     echo.
     echo.export PYTHONPATH=
     echo.
     echo.LANG=en_US.UTF-8
-    echo.PATH="${LOCALDESTDIR}/bin:${MINGW_PREFIX}/bin:${INFOPATH}:${MSYS2_PATH}:${ORIGINAL_PATH}"
-    echo.PATH="${LOCALDESTDIR}/bin-audio:${LOCALDESTDIR}/bin-global:${LOCALDESTDIR}/bin-video:${PATH}"
+    echo.PATH="${MINGW_PREFIX}/bin:${INFOPATH}:${MSYS2_PATH}:${ORIGINAL_PATH}"
+    echo.PATH="${LOCALDESTDIR}/bin-audio:${LOCALDESTDIR}/bin-global:${LOCALDESTDIR}/bin-video:${LOCALDESTDIR}/bin:${PATH}"
     echo.PATH="/opt/cargo/bin:/opt/bin:${PATH}"
     echo.source '/etc/profile.d/perlbin.sh'
     echo.PS1='\[\033[32m\]\u@\h \[\e[33m\]\w\[\e[0m\]\n\$ '

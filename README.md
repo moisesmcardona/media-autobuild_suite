@@ -20,6 +20,7 @@ For information about the compiler environment see the wiki, there you also have
     - Light build:
         - amd amf encoders (built-in)
         - cuda (built-in)
+        - cuda-llvm (built-in)
         - cuvid (built-in)
         - ffnvcodec (git)
         - libdav1d (git)
@@ -116,7 +117,7 @@ For information about the compiler environment see the wiki, there you also have
         - openal (git)
         - opencl (from system)
         - opengl (from system)
-        - vapoursynth (R46)
+        - vapoursynth (R47.2)
 
 - other tools
     - aom (git)
@@ -140,7 +141,8 @@ For information about the compiler environment see the wiki, there you also have
     - mplayer (svn) (unsupported)
     - mpv (git) including in addition to ffmpeg libs:
         - Base build (ffmpegChoice=2 or 3)
-            - ANGLE (from <https://i.fsbn.eu/pub/angle/>)
+            - ANGLE Headers (git)
+                - requires ANGLE shared libraries from somewhere else (i.e. Chrome, Firefox) for gpu-context=angle support
             - lcms2 (mingw)
             - libass (git)
             - libbluray (git)
@@ -150,14 +152,13 @@ For information about the compiler environment see the wiki, there you also have
             - mujs (git)
             - rubberband (git snapshot)
             - uchardet (mingw)
-            - vulkan, shaderc, crossc (git)
+            - vulkan, shaderc, spirv-cross, libplacebo (git)
+            - vapoursynth (R47.2)
         - Full build (ffmpegChoice=4)
-            - dvdread (git)
             - dvdnav (git)
             - libarchive (mingw)
             - shared libmpv
             - openal (git)
-            - vapoursynth (R46)
     - opus-tools (git)
     - rav1e (git)
     - redshift (git)
@@ -166,6 +167,7 @@ For information about the compiler environment see the wiki, there you also have
     - sox (14.4.2)
     - speex (git)
     - svt-hevc (git)
+    - svt-av1 (git)
     - tesseract (git)
     - vorbis-tools (git snapshot)
     - vpx (VP8 and VP9 8, 10 and 12 bit) (git)
@@ -174,6 +176,7 @@ For information about the compiler environment see the wiki, there you also have
     - x264 (8 and 10 bit, with l-smash [mp4 output], lavf and ffms2) (git)
     - x265 (8, 10 and 12 bit) (hg)
         - includes svt-hevc encoder if enabled
+    - xvc (git) (unsupported)
     - xvid (1.3.5)
 
 --------
