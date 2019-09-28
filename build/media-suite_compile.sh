@@ -173,8 +173,8 @@ if [[ $ripgrep = y || $rav1e = y || $dssim = y ]]; then
 
     _check=(bin/sccache.exe)
     if do_vcs "https://github.com/mozilla/sccache.git"; then
-        do_uninstall "${_check[@]}"
         do_rust
+        sccache --stop-server >/dev/null 2>&1 || true
         do_install "target/$CARCH-pc-windows-gnu/release/sccache.exe" bin/
         do_checkIfExist
         export RUSTC_WRAPPER=sccache
@@ -2020,7 +2020,7 @@ if [[ $mpv != "n" ]] && pc_exists libavcodec libavformat libswscale libavfilter;
         do_vcs "https://github.com/KhronosGroup/Vulkan-Loader.git" vulkan-loader; then
         _DeadSix27="https://raw.githubusercontent.com/DeadSix27/python_cross_compile_script/master"
         do_uninstall "${_check[@]}"
-        do_patch "$_DeadSix27/patches/vulkan/0001-fix-cross-compiling.patch"
+        do_patch "$_DeadSix27/patches/vulkan/0001-fix-cross-compiling.patch" am
         create_build_dir
         log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
         cd_safe Vulkan-Headers
@@ -2271,13 +2271,14 @@ if [[ $cyanrip = y ]]; then
                 --prefix="$LOCALDESTDIR/opt/cyanffmpeg" \
                 --disable-{programs,devices,filters,decoders,hwaccels,encoders,muxers} \
                 --disable-{debug,protocols,demuxers,parsers,doc,swscale,postproc,network} \
-                --disable-{avdevice,avfilter,autodetect} \
+                --disable-{avdevice,autodetect} \
                 --disable-bsfs --enable-protocol=file \
-                --enable-encoder=flac,tta,aac,wavpack,alac \
-                --enable-muxer=flac,tta,ipod,wv,mp3,opus,ogg \
+                --enable-encoder=flac,tta,aac,wavpack,alac,pcm_s16le,pcm_s32le \
+                --enable-muxer=flac,tta,ipod,wv,mp3,opus,ogg,wav,pcm_s16le,pcm_s32le \
                 --enable-parser=png,mjpeg --enable-decoder=mjpeg,png \
                 --enable-demuxer=image2,png_pipe,bmp_pipe \
                 --enable-{bzlib,zlib,lzma,iconv} \
+                --enable-filter=hdcd \
                 "${cyan_ffmpeg_opts[@]}"
             do_makeinstall
             files_exist "${_check[@]}" && touch ../"build_successful${bits}_cyan"
