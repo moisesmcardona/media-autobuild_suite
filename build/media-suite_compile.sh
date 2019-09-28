@@ -584,7 +584,7 @@ _check=(libFLAC{,++}.{,l}a flac{,++}.pc)
 if [[ $flac = y ]] && do_vcs "https://github.com/xiph/flac.git"; then
     do_pacman_install libogg
 	# Patch for Pull Request #52, with a bug fix.
-	do_patch https://gist.githubusercontent.com/moisesmcardona/4fa1fa47ee829a0f11c08fd83410075a/raw/a99ad779cfa001ceb216196fa01c4b3d7da15d3e/flac-pr-52-with-bugfix
+	do_patch https://gist.githubusercontent.com/moisespr123/4fa1fa47ee829a0f11c08fd83410075a/raw/a99ad779cfa001ceb216196fa01c4b3d7da15d3e/flac-pr-52-with-bugfix
     do_autogen
     if [[ $standalone = y ]]; then
         _check+=(bin-audio/metaflac.exe)
@@ -691,7 +691,7 @@ if [[ $standalone = y ]] && enabled libopus; then
     if do_vcs "https://github.com/xiph/libopusenc.git"; then
         do_uninstall "${_check[@]}"
 		# Patch to apply Speex Resample quality of 10
-		do_patch "https://gist.githubusercontent.com/moisesmcardona/e898be60a391502f2ed8b56ad0f2c3f6/raw/2a1c4c518ec248d16bb98b69925e587f13516431/libopusenc-resample-speex-10"
+		do_patch "https://gist.githubusercontent.com/moisespr123/e898be60a391502f2ed8b56ad0f2c3f6/raw/2a1c4c518ec248d16bb98b69925e587f13516431/libopusenc-resample-speex-10"
         do_autogen
         do_separate_confmakeinstall --disable-{examples,doc}
         do_checkIfExist
