@@ -242,7 +242,7 @@ if [[ "$mplayer" = "y" ]] || ! mpv_disabled libass ||
     [[ $ffmpeg = "sharedlibs" ]] && enabled_any {lib,}fontconfig &&
         do_removeOption "--enable-(lib|)fontconfig"
     if enabled_any {lib,}fontconfig &&
-        do_vcs "https://gitlab.freedesktop.org/fontconfig/fontconfig.git#tag=2.13.1"; then
+        do_vcs "https://gitlab.freedesktop.org/fontconfig/fontconfig.git#tag=LATEST"; then
         do_uninstall include/fontconfig "${_check[@]}"
         sed -i 's| test$||' Makefile.am
         sed -i 's|Libs.private:|& -lintl|' fontconfig.pc.in
@@ -333,8 +333,8 @@ fi
 _check=(libgnutls.{,l}a gnutls.pc)
 if enabled_any gnutls librtmp || [[ $rtmpdump = y ]] || [[ $curl = gnutls ]] &&
     ! files_exist "${_check[@]}" &&
-    do_wget -h 4331fca55817ecdd74450b908a6c29b4f05bb24dd13144c6284aa34d872e1fcb \
-    "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.9.tar.xz"; then
+    do_wget -h b1f3ca67673b05b746a961acf2243eaae0ffe658b6a6494265c648e7c7812293 \
+    "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.10.tar.xz"; then
         do_pacman_install nettle
         do_uninstall include/gnutls "${_check[@]}"
         grep_or_sed crypt32 lib/gnutls.pc.in 's/Libs.private.*/& -lcrypt32/'
