@@ -333,7 +333,7 @@ if [[ $curl = y ]]; then
 fi
 _check=(libgnutls.{,l}a gnutls.pc)
 if enabled_any gnutls librtmp || [[ $rtmpdump = y ]] || [[ $curl = gnutls ]] &&
-    ! files_exist "${_check[@]}" &&
+    do_pkgConfig "gnutls = 3.6.10" &&
     do_wget -h b1f3ca67673b05b746a961acf2243eaae0ffe658b6a6494265c648e7c7812293 \
     "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.10.tar.xz"; then
         do_pacman_install nettle
@@ -592,12 +592,17 @@ if [[ $flac = y ]] && do_vcs "https://github.com/xiph/flac.git"; then
     else
         sed -i "/^SUBDIRS/,/[^\\]$/{/flac/d;}" src/Makefile.in
     fi
+    sed -i 's|__declspec(dllimport)||g' include/FLAC{,++}/export.h
     do_uninstall include/FLAC{,++} share/aclocal/libFLAC{,++}.m4 "${_check[@]}"
     do_separate_confmakeinstall audio --disable-{xmms-plugin,doxygen-docs}
     do_checkIfExist
 elif [[ $sox = y ]] || { [[ $standalone = y ]] && enabled_any libvorbis libopus; }; then
     do_pacman_install flac
+    grep_or_sed dllimport "$MINGW_PREFIX"/include/FLAC++/export.h \
+        's|__declspec(dllimport)||g' "$MINGW_PREFIX"/include/FLAC{,++}/export.h
 fi
+grep_or_sed dllimport "$LOCALDESTDIR"/include/FLAC++/export.h \
+        's|__declspec(dllimport)||g' "$LOCALDESTDIR"/include/FLAC{,++}/export.h
 
 _check=(libvo-amrwbenc.{l,}a vo-amrwbenc.pc)
 if [[ $ffmpeg != "no" ]] && enabled libvo-amrwbenc &&
@@ -681,7 +686,7 @@ if [[ $standalone = y ]] && enabled libopus; then
     _deps=(opus.pc "$MINGW_PREFIX"/lib/pkgconfig/{libssl,ogg}.pc)
     if do_vcs "https://github.com/xiph/opusfile.git"; then
         do_uninstall "${_check[@]}"
-        do_patch "https://0x0.st/sgwa.txt"
+        do_patch "https://gist.githubusercontent.com/1480c1/c3f32033ad4a07264e2063f0fb38fc1b/raw/0001-Disable-cert-store-integration-if-OPENSSL_VERSION_NU.patch" am
         do_autogen
         do_separate_confmakeinstall --disable-{examples,doc}
         do_checkIfExist
@@ -1391,7 +1396,7 @@ if [[ $x264 != no ]]; then
             if do_vcs "https://github.com/FFMS/ffms2.git"; then
                 do_uninstall "${_check[@]}"
                 sed -i 's/Libs.private.*/& -lstdc++/;s/Cflags.*/& -DFFMS_STATIC/' ffms2.pc.in
-                do_patch "https://0x0.st/sgEY.txt"
+                do_patch "https://raw.githubusercontent.com/m-ab-s/media-autobuild_suite/gh-pages/patches/0001-ffmsindex-fix-linking-issues.patch" am
                 mkdir -p src/config
                 do_autoreconf
                 do_separate_confmakeinstall video --prefix="$LOCALDESTDIR/opt/lightffmpeg"
