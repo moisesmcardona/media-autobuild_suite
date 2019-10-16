@@ -368,12 +368,16 @@ do_wget() {
     $notmodified && [[ -f $archive ]] && curlcmds+=(-z "$archive" -R)
     [[ $hash ]] && tries=3
 
+    if [[ -f $archive ]] && [[ $hash ]] && check_hash "$archive" "$hash"; then
+        $quiet || do_print_status prefix "${bold}├${reset} " "${dirName:-$archive}" "$green" "File up-to-date"
+        tries=0
+    fi
+
     while [[ $tries -gt 0 ]]; do
         temp_file=$(mktemp)
         response_code=$("${curlcmds[@]}" -w "%{http_code}" -o "$temp_file" "$url")
 
-        if diff -q "$archive" "$temp_file" > /dev/null 2>&1 ||
-            [[ -n $hash ]] && check_hash "$archive" "$hash"; then
+        if [[ -f $archive ]] && diff -q "$archive" "$temp_file" > /dev/null 2>&1; then
             $quiet || do_print_status prefix "${bold}├${reset} " "${dirName:-$archive}" "$green" "File up-to-date"
             rm -f "$temp_file"
             break
@@ -1275,7 +1279,7 @@ do_rust() {
     {
         command -v sccache > /dev/null 2>&1 &&
             export RUSTC_WRAPPER=sccache &&
-            sccache --start-server
+            { sccache --start-server > /dev/null 2>&1 || true; }
     } || unset RUSTC_WRAPPER
     # use this array to pass additional parameters to cargo
     local rust_extras=()
@@ -2019,6 +2023,19 @@ grep_or_sed() {
     [[ -n $1 ]] && sed_files=("$@")
 
     /usr/bin/grep -q -- "$grep_re" "$grep_file" ||
+        /usr/bin/sed -ri -- "$sed_re" "${sed_files[@]}"
+}
+
+grep_and_sed() {
+    local grep_re="$1"
+    local grep_file="$2"
+    [[ ! -f $grep_file ]] && return
+    local sed_re="$3"
+    shift 3
+    local sed_files=("$grep_file")
+    [[ -n $1 ]] && sed_files=("$@")
+
+    /usr/bin/grep -q -- "$grep_re" "$grep_file" &&
         /usr/bin/sed -ri -- "$sed_re" "${sed_files[@]}"
 }
 
