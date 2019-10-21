@@ -995,9 +995,8 @@ if { [[ $aom = y ]] || { [[ $ffmpeg != "no" ]] && enabled libaom; }; } &&
     fi
     do_uninstall include/aom "${_check[@]}"
     get_external_opts extracommands
-    do_cmakeinstall video -DENABLE_{DOCS,TOOLS,TESTS}=off -DENABLE_NASM=on \
-        -DENABLE_TEST{S,DATA}=OFF -DCONFIG_LOWBITDEPTH=1 \
-        "${extracommands[@]}"
+    do_cmakeinstall video -DENABLE_{DOCS,TOOLS}=off -DENABLE_TEST{S,DATA}=OFF \
+        -DENABLE_NASM=on -DFORCE_HIGHBITDEPTH_DECODING=0 "${extracommands[@]}"
     do_checkIfExist
     unset extracommands
 fi
@@ -1426,7 +1425,7 @@ if [[ $x264 != no ]]; then
             if do_vcs "https://github.com/FFMS/ffms2.git"; then
                 do_uninstall "${_check[@]}"
                 sed -i 's/Libs.private.*/& -lstdc++/;s/Cflags.*/& -DFFMS_STATIC/' ffms2.pc.in
-                do_patch "https://raw.githubusercontent.com/m-ab-s/media-autobuild_suite/gh-pages/patches/0001-ffmsindex-fix-linking-issues.patch" am
+                do_patch "https://gist.githubusercontent.com/1480c1/8881966fa8151bc5e17d5a898b2d447f/raw/0001-ffmsindex-fix-linking-issues.patch" am
                 mkdir -p src/config
                 do_autoreconf
                 do_separate_confmakeinstall video --prefix="$LOCALDESTDIR/opt/lightffmpeg"
@@ -2020,7 +2019,7 @@ if [[ $mpv != "n" ]] && pc_exists libavcodec libavformat libswscale libavfilter;
     do_pacman_remove angleproject-git
     _check=(EGL/egl.h)
     if mpv_enabled egl-angle && do_vcs "https://chromium.googlesource.com/angle/angle"; then
-        do_simple_print "${orange}mpv will need libGLESv2.dll and libEGL.dll to execute"'!'
+        do_simple_print "${orange}mpv will need libGLESv2.dll and libEGL.dll to use gpu-context=angle"'!'
         do_simple_print "You can find these in your browser's installation directory, usually."
         do_uninstall include/{EGL,GLES{2,3},GLSLANG,KHR,platform} angle_gl.h \
             lib{GLESv2,EGL}.a "${_check[@]}"
