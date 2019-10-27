@@ -1369,7 +1369,7 @@ log() {
     [[ $quiet ]] || do_print_progress Running "$name"
     [[ $_cmd =~ ^(make|ninja)$ ]] && extra="-j$cpuCount"
     if [[ $logging == "y" ]]; then
-        printf 'CFLAGS: %s\nLDFLAGS: %s\n%s %s\n' "$CFLAGS" "$LDFLAGS" "$_cmd" "$*" > "ab-suite.$name.log"
+        printf 'CPPFLAGS: %s\nCFLAGS: %s\nCXXFLAGS: %s\nLDFLAGS: %s\n%s %s\n' "$CPPFLAGS" "$CFLAGS" "$CXXFLAGS" "$LDFLAGS" "$_cmd" "$*" > "ab-suite.$name.log"
         $_cmd $extra "$@" >> "ab-suite.$name.log" 2>&1 ||
             { [[ $extra ]] && $_cmd -j1 "$@" >> "ab-suite.$name.log" 2>&1; } ||
             compilation_fail "$name"
@@ -1857,7 +1857,7 @@ clean_suite() {
             grep -E "^($LOCALBUILDDIR|/trunk$LOCALBUILDDIR)" < _to_remove |
                 grep -Ev "^$LOCALBUILDDIR/(patches|extras|$)" | sort -u | xargs -r rm -rf
         fi
-        if [[ $(du -s /var/cache/pacman/pkg/ | awk '{print $1}') -gt 1000000 ]]; then
+        if [[ $(du -s /var/cache/pacman/pkg/ | cut -f1) -gt 1000000 ]]; then
             echo -e "\\t${orange}Deleting unneeded Pacman packages...${reset}"
             pacman -Sc --noconfirm
         fi
