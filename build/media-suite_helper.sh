@@ -2013,6 +2013,78 @@ create_cmake_toolchain() {
         printf '%s\n' "${toolchain_file[@]}" > "$LOCALDESTDIR"/etc/toolchain.cmake
 }
 
+get_signature() {
+    # get_signature 96865171 0F3BE490
+    # adds keys to gpg keychain for verifying
+    for keyserver in keys.openpgp.org pool.sks-keyservers.net keyserver.ubuntu.com pgp.mit.edu; do
+        gpg --keyserver "$keyserver" --receive-keys "$@" && break
+    done > /dev/null 2>&1
+}
+
+check_signature() {
+    # check_signature -k 96865171 gnutls-3.6.8.tar.xz.sig gnutls-3.6.8.tar.xz
+    # check_signature -k 1528635D8053A57F77D1E08630A59377A7763BE6 http://libsdl.org/release/SDL2-2.0.10.tar.gz.sig SDL2-2.0.10.tar.gz
+    # run in the same directory as the files. Works with .sig and some .asc
+    # file needs to start with -----BEGIN PGP SIGNATURE-----
+    local key=()
+    while true; do
+        case $1 in
+        -k) key+=("$2") && shift 2 ;; # keys to retrieve using get_signature
+        --)
+            shift
+            break
+            ;;
+        *) break ;;
+        esac
+    done
+    local sigFile=$1
+    shift
+
+    # Get name of sig file
+    local sigFileName=${sigFile##*/}
+    sigFileName=${sigFileName:-"$(/usr/bin/curl -sI "$sigFile" | grep -Eo 'filename=.*$' | sed 's/filename=//')"}
+    [[ -z $sigFileName ]] && echo "Sig file not set" && return 1
+
+    # Download sig file if url/cp file if local file
+    if ! do_wget -c -r -q "$sigFile" "$sigFileName" && [[ -f $sigFile ]]; then
+        sigFile="$(
+            cd_safe "$(dirname "$sigFile")"
+            printf '%s' "$(pwd -P)" '/' "$(basename -- "$sigFile")"
+        )"
+        [[ ${sigFile%/*} != "$PWD" ]] && cp -f "$sigFile" "$sigFileName" > /dev/null 2>&1
+    fi
+
+    # Retrive keys
+    [[ -n ${key[0]} ]] && get_signature "${key[@]}"
+
+    # Verify file is correct
+    # $? 1 Bad sig or file integrity compromised
+    # $? 2 no-pub-key or no file
+    gpg --auto-key-retrieve --keyserver hkps://hkps.pool.sks-keyservers.net --verify "$sigFileName" "$@" > /dev/null 2>&1
+    case $? in
+    1) do_exit_prompt "Failed to verify integrity of ${sigFileName%%.sig}" ;;
+    2) do_exit_prompt "Failed to find gpg key or no file found for ${sigFileName%%.sig}" ;;
+    esac
+}
+
+do_jq() {
+    local jq_file="$jq_file" output_raw_string=true
+    # Detect if in pipe, useful for curling github api
+    if [[ ! -t 0 ]]; then
+        jq_file=/dev/stdin
+    elif [[ -f $1 ]]; then
+        jq_file="$1" && shift
+    fi
+    for a in "$@"; do
+        grep -q -- ^- <<< "$a" && output_raw_string=false
+    done
+    if $output_raw_string; then
+        jq -r "$*" < "$jq_file"
+    else
+        jq "$@" < "$jq_file"
+    fi
+}
+
 grep_or_sed() {
     local grep_re="$1"
     local grep_file="$2"
