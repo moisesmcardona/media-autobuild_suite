@@ -25,6 +25,7 @@ color 70
 title media-autobuild_suite
 
 setlocal
+chcp 65001
 cd /d "%~dp0"
 set "TERM=xterm-256color"
 setlocal
@@ -1607,7 +1608,7 @@ rem ------------------------------------------------------------------
 if %build32%==yes call :writeProfile 32
 if %build64%==yes call :writeProfile 64
 
-findstr hkps://keys.openpgp.org "%instdir%\%msys2%\home\%USERNAME%\.gnupg\gpg.conf" || echo keyserver hkps://keys.openpgp.org >> "%instdir%\%msys2%\home\%USERNAME%\.gnupg\gpg.conf"
+findstr hkps://keys.openpgp.org "%instdir%\%msys2%\home\%USERNAME%\.gnupg\gpg.conf" >nul 2>&1 || echo keyserver hkps://keys.openpgp.org >> "%instdir%\%msys2%\home\%USERNAME%\.gnupg\gpg.conf"
 
 rem loginProfile
 if exist %instdir%\%msys2%\etc\profile.pacnew ^
