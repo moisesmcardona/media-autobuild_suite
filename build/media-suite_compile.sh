@@ -152,7 +152,7 @@ if [[ $packing = y ]] &&
 fi
 
 _check=("$RUSTUP_HOME"/bin/rustup.exe)
-if [[ $ripgrep = y || $rav1e = y || $dssim = y ]]; then
+if [[ $ripgrep = y || $rav1e = y || $dssim = y ]] || enabled librav1e; then
     if ! files_exist "$RUSTUP_HOME"/bin/rustup.exe; then
         mkdir -p "$LOCALBUILDDIR/rustinstall"
         cd_safe "$LOCALBUILDDIR/rustinstall"
@@ -1715,7 +1715,7 @@ if [[ $ffmpeg != "no" ]] && enabled liblensfun &&
 fi
 
 _check=(bin-video/vvc/{Encoder,Decoder}App.exe)
-if [[ $vvc = y ]] &&
+if [[ $bits = 64bits && $vvc = y ]] &&
     do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/VVCSoftware_VTM.git" vvc; then
     do_uninstall bin-video/vvc
     # patch for easier install of apps
@@ -1854,6 +1854,11 @@ if [[ $ffmpeg != "no" ]]; then
 
         enabled vapoursynth &&
             do_patch "https://0x0.st/zp4W.txt vapoursynth_alt.patch" am
+
+        # librav1e
+        if enabled librav1e; then
+            do_removeOption FFMPEG_OPTS_SHARED "--enable-librav1e"
+        fi
 
         if [[ ${#FFMPEG_OPTS[@]} -gt 35 ]]; then
             # remove redundant -L and -l flags from extralibs

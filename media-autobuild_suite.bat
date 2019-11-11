@@ -25,7 +25,7 @@ color 70
 title media-autobuild_suite
 
 setlocal
-chcp 65001
+chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 set "TERM=xterm-256color"
 setlocal
@@ -115,8 +115,8 @@ libaom libopenmpt version3
 :: options also available with the suite
 set ffmpeg_options_full=chromaprint decklink frei0r libbs2b libcaca ^
 libcdio libfdk-aac libflite libfribidi libgme libgsm libilbc libsvthevc libsvtav1 ^
-libkvazaar libmodplug librtmp librubberband libssh libtesseract libxavs libzmq ^
-libzvbi openal #libvmaf libcodec2 libsrt ladspa #vapoursynth #liblensfun librav1e
+libkvazaar libmodplug librtmp librubberband #libssh libtesseract libxavs libzmq ^
+libzvbi openal libvmaf libcodec2 libsrt ladspa librav1e #vapoursynth #liblensfun
 
 :: options also available with the suite that add shared dependencies
 set ffmpeg_options_full_shared=opencl opengl cuda-nvcc libnpp libopenh264
