@@ -175,7 +175,7 @@ if [[ $ripgrep = y || $rav1e = y || $dssim = y ]] || enabled librav1e; then
         "stable-$CARCH-pc-windows-gnu"
 
     _check=(bin/sccache.exe)
-    if do_vcs "https://github.com/mozilla/sccache.git"; then
+    if [[ $ccache = y ]] && do_vcs "https://github.com/mozilla/sccache.git"; then
         do_rust
         sccache --stop-server >/dev/null 2>&1 || true
         do_install "target/$CARCH-pc-windows-gnu/release/sccache.exe" bin/
@@ -457,13 +457,13 @@ fi
 unset _deps
 
 _check=(libtiff{.a,-4.pc})
-if enabled_any libwebp libtesseract &&
+if [[ $standalone = y ]] && enabled_any libtesseract libwebp &&
     do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
     do_pacman_install libjpeg-turbo xz zlib zstd
     do_uninstall "${_check[@]}"
     grep_or_sed 'Requires.private' libtiff-4.pc.in \
         '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd'
-    do_cmakeinstall global -Dwebp=OFF -DUNIX=OFF
+    do_cmakeinstall global -Dwebp=OFF -DUNIX=OFF -Djbig=OFF
     do_checkIfExist
 fi
 
@@ -476,7 +476,7 @@ if [[ $ffmpeg != "no" || $standalone = y ]] && enabled libwebp &&
         extracommands=(--enable-libwebp{demux,decoder,extras}
             "LIBS=$($PKG_CONFIG --libs libpng libtiff-4)")
     else
-        extracommands=()
+        extracommands=(--disable-tiff)
         sed -i -e '/examples/d' -e 's/ man//' Makefile.am
     fi
     do_autoreconf
@@ -1603,17 +1603,17 @@ if enabled libxvid && [[ $standalone = y ]] && ! { files_exist "${_check[@]}" &&
     do_checkIfExist
 fi
 
-_check=(libvmaf.{a,h,pc})
+_check=(libvmaf.{a,pc} libvmaf/libvmaf.h)
 if [[ $bits = 32bit ]]; then
     do_removeOption --enable-libvmaf
 elif [[ $ffmpeg != "no" ]] && enabled libvmaf &&
     do_vcs "https://github.com/Netflix/vmaf.git"; then
     do_uninstall share/model "${_check[@]}"
-    log clean make clean
-    do_make INSTALL_PREFIX="$LOCALDESTDIR"
-    do_makeinstall INSTALL_PREFIX="$LOCALDESTDIR"
+    do_patch "https://github.com/Netflix/vmaf/compare/master...1480c1:cmake.patch cmake.patch" am
+    do_cmakeinstall
     do_checkIfExist
 fi
+grep_or_sed lstdc "$(file_installed libvmaf.pc)" 's;Libs.private.*;& -lstdc++;'
 
 _check=(ffnvcodec/nvEncodeAPI.h ffnvcodec.pc)
 if [[ $ffmpeg != "no" ]] && { enabled ffnvcodec ||
@@ -2066,8 +2066,9 @@ if [[ $mpv != "n" ]] && pc_exists libavcodec libavformat libswscale libavfilter;
     if ! mpv_disabled vulkan &&
         do_vcs "https://github.com/KhronosGroup/Vulkan-Loader.git" vulkan-loader; then
         _DeadSix27="https://raw.githubusercontent.com/DeadSix27/python_cross_compile_script/master"
+        _shinchiro="https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master"
         do_uninstall "${_check[@]}"
-        do_patch "$_DeadSix27/patches/vulkan/0001-fix-cross-compiling.patch" am
+        do_patch "$_shinchiro/packages/vulkan-0001-cross-compile-static-linking-hacks.patch" am
         create_build_dir
         log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
         cd_safe Vulkan-Headers
