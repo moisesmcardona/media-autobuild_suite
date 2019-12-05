@@ -432,8 +432,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]] &&
     else
         extra_opts+=(--with-{schannel,winidn,nghttp2} --without-{ssl,gnutls,mbedtls})
     fi
-    grep_or_sed NGHTTP2_STATICLIB libcurl.pc.in 's;Cflags.*;& -DNGHTTP2_STATICLIB;'
-    grep_or_sed NGHTTP2_STATICLIB curl-config.in 's;-DCURL_STATICLIB ;&-DNGHTTP2_STATICLIB ;'
+
     [[ ! -f configure || configure.ac -nt configure ]] && log autogen ./buildconf
     [[ $curl = openssl ]] && hide_libressl
     hide_conflicting_libs
@@ -536,7 +535,7 @@ if [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; then
         sed -i -e 's|Libs.private.*|& -lstdc++|' \
                -e 's|Requires.private.*|& libarchive libcurl iconv|' tesseract.pc.in
         do_separate_confmakeinstall global --disable-{graphics,tessdata-prefix} \
-            LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" \
+            LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" CXXFLAGS="$CXXFLAGS -DCURL_STATICLIB" \
             LIBS="$($PKG_CONFIG --libs iconv lept)" --datadir="$LOCALDESTDIR/bin-global"
         if [[ ! -f $LOCALDESTDIR/bin-global/tessdata/eng.traineddata ]]; then
             do_pacman_install tesseract-data-eng
