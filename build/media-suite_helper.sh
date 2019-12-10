@@ -1964,20 +1964,26 @@ EOF
 }
 
 create_ab_ccache() {
-    local bin temp_file
+    local bin temp_file ccache_path=false ccache_win_path=
     temp_file=$(mktemp)
+    if [[ $ccache = y ]] && command -v ccache; then
+        ccache_path="$(command -v ccache)"
+        ccache_win_path=$(cygpath -m "$ccache_path")
+    fi
     for bin in {$MINGW_CHOST-,}{gcc,g++} clang{,++} cc cpp c++; do
+        command -v "$bin" || continue
         cat << EOF > "$temp_file"
 @echo off >nul 2>&1
 rem() { "\$@"; }
 rem test -f nul && rm nul
-rem $(command -v ccache) --help > /dev/null 2>&1 && $(command -v ccache) $(command -v $bin) "\$@" || $(command -v $bin) "\$@"
+rem $ccache_path --help > /dev/null 2>&1 && $ccache_path $(command -v $bin) "\$@" || $(command -v $bin) "\$@"
 rem exit \$?
-$(cygpath -m "$(command -v ccache)") $(cygpath -m "$(command -v $bin)") %*
+$ccache_win_path $(cygpath -m "$(command -v $bin)") %*
 EOF
         diff -q "$temp_file" "$LOCALDESTDIR/bin/$bin.bat" > /dev/null 2>&1 || cp -f "$temp_file" "$LOCALDESTDIR/bin/$bin.bat"
         chmod +x "$LOCALDESTDIR/bin/$bin.bat"
     done
+    rm "$temp_file"
 }
 
 create_cmake_toolchain() {
@@ -1992,8 +1998,6 @@ create_cmake_toolchain() {
         "SET(CMAKE_PREFIX_PATH $_win_path_LOCALDESTDIR $_win_path_MINGW_PREFIX $_win_path_MINGW_PREFIX/$MINGW_CHOST)"
         "SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)"
         "SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)"
-        "SET(CMAKE_C_COMPILER $_win_path_LOCALDESTDIR/bin/gcc.bat)"
-        "SET(CMAKE_CXX_COMPILER $_win_path_LOCALDESTDIR/bin/g++.bat)"
     )
 
     [[ -f "$LOCALDESTDIR"/etc/toolchain.cmake ]] &&

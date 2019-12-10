@@ -222,6 +222,19 @@ if [[ $dssim = y ]] &&
     do_checkIfExist
 fi
 
+_check=(libxml2.a libxml2/libxml/xmlIO.h libxml-2.0.pc)
+if { enabled libxml2 || [[ $cyanrip = y ]]; } &&
+    do_vcs "https://gitlab.gnome.org/GNOME/libxml2.git";then
+    do_uninstall include/libxml2/libxml "${_check[@]}"
+    NOCONFIGURE=true do_autogen
+    [[ -f config.mak ]] && log "distclean" make distclean
+    sed -ri 's|(bin_PROGRAMS = ).*|\1|g;/^runtest_SOURCES.*/,/We create xml2Conf.*/d' Makefile.am
+    CFLAGS+=" -DLIBXML_STATIC_FOR_DLL -DNOLIBTOOL" \
+        do_separate_conf --without-python --without-catalog
+    do_makeinstall
+    do_checkIfExist
+fi
+
 if [[ "$mplayer" = "y" ]] || ! mpv_disabled libass ||
     { [[ $ffmpeg != "no" ]] && enabled_any libass libfreetype {lib,}fontconfig libfribidi; }; then
     do_pacman_remove freetype fontconfig harfbuzz fribidi
@@ -259,7 +272,6 @@ if [[ "$mplayer" = "y" ]] || ! mpv_disabled libass ||
             "--with-libiconv-lib=$MINGW_PREFIX/lib" "--with-libiconv-includes=$MINGW_PREFIX/include" \
             "LDFLAGS=$LDFLAGS -L${LOCALDESTDIR}/lib -L${MINGW_PREFIX}/lib")
         if enabled libxml2; then
-            do_pacman_install libxml2
             sed -i 's|Cflags:|& -DLIBXML_STATIC|' fontconfig.pc.in
             extracommands+=(--enable-libxml2)
         fi
@@ -1157,7 +1169,6 @@ if { { [[ $ffmpeg != "no" ]] && enabled libbluray; } || ! mpv_disabled libbluray
         extracommands+=(--disable-bdjava-jar)
     fi
     if enabled libxml2; then
-        do_pacman_install libxml2
         sed -ri 's;(Cflags.*);\1 -DLIBXML_STATIC;' src/libbluray.pc.in
     else
         extracommands+=(--without-libxml2)
@@ -1511,7 +1522,7 @@ if [[ ! $x265 = "n" ]] && do_vcs "hg::https://bitbucket.org/multicoreware/x265";
         log "cmake" cmake "$LOCALBUILDDIR/$(get_first_subdir)/source" -G Ninja \
         -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DBIN_INSTALL_DIR="$LOCALDESTDIR/bin-video" \
         -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DHIGH_BIT_DEPTH=ON -DHG_EXECUTABLE=/usr/bin/hg.bat \
-        -DENABLE_HDR10_PLUS=ON $xpsupport \
+        -DENABLE_HDR10_PLUS=ON $xpsupport -DCMAKE_CXX_COMPILER="$LOCALDESTDIR/bin/g++.bat" \
         -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" "$@"
         extra_script post cmake
         do_ninja
@@ -1785,7 +1796,7 @@ if [[ $ffmpeg != "no" ]]; then
         do_addOption --extra-cflags=-DZMQ_STATIC
     fi
     enabled frei0r && do_addOption --extra-libs=-lpsapi
-    enabled libxml2 && do_addOption --extra-cflags=-DLIBXML_STATIC && do_pacman_install libxml2
+    enabled libxml2 && do_addOption --extra-cflags=-DLIBXML_STATIC
     enabled ladspa && do_pacman_install ladspa-sdk
     if enabled vapoursynth && pc_exists "vapoursynth-script >= 42"; then
         _ver="$(pkg-config --modversion vapoursynth-script)"
@@ -2255,7 +2266,6 @@ fi
 enabled openssl && hide_libressl -R
 
 if [[ $cyanrip = y ]]; then
-    do_pacman_install libxml2
     do_pacman_install libcdio-paranoia
     sed -ri 's;-R[^ ]*;;g' "$MINGW_PREFIX/lib/pkgconfig/libcdio.pc"
 
@@ -2275,7 +2285,7 @@ if [[ $cyanrip = y ]]; then
         do_checkIfExist
     fi
 
-    _deps=(libneon.a "$MINGW_PREFIX"/lib/libxml2.a)
+    _deps=(libneon.a libxml2.a)
     _check=(musicbrainz5/mb5_c.h libmusicbrainz5{,cc}.{a,pc})
     if do_vcs "https://github.com/wiiaboo/libmusicbrainz.git"; then
         do_uninstall "${_check[@]}" include/musicbrainz5
