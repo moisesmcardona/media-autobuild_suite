@@ -23,22 +23,23 @@ ncols=72
     rm -f "$LOCALBUILDDIR"/{7za,wget,grep}.exe
 
 do_simple_print() {
-    local plain formatString='' dateValue newline='\n'
-    while true; do
-        case "$1" in
-        -n) newline='' && shift ;;
-        -p) plain=y && shift ;;
+    local plain=false formatString dateValue newline='\n' OPTION OPTIND
+    while getopts ':np' OPTION; do
+        case "$OPTION" in
+        n) newline='' ;;
+        p) plain=true ;;
         *) break ;;
         esac
     done
+    shift "$((OPTIND - 1))"
 
     if [[ $timeStamp == y ]]; then
-        formatString+="${purple}"'%(%H:%M:%S)T'"${reset}"' '
+        formatString="${purple}"'%(%H:%M:%S)T'"${reset}"' '
         dateValue='-1'
-    else
-        [[ $plain == y ]] && formatString+='\t'
+    elif $plain; then
+        formatString='\t'
     fi
-    if [[ -z $plain ]]; then
+    if ! $plain; then
         formatString+="${bold}├${reset} "
     fi
     printf "$formatString"'%b'"${reset}${newline}" $dateValue "$*"
@@ -50,11 +51,8 @@ do_print_status() {
         _prefix="$2" && shift 2
         _prefixpad=2
     fi
-    local name="$1 "
-    local color="$2"
-    local status="$3"
-    local pad
-    printf -v pad ".%.0s" $(seq -s ' ' 1 $ncols)
+    local name="$1 " color="$2" status="$3" pad
+    eval printf -v pad ".%.s" "{1..$ncols}"
     if [[ $timeStamp == y ]]; then
         printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s%s %s [%s]\n' -1 "$_prefix" "${bold}$name${reset}" \
             "${pad:0:$((ncols - _prefixpad - ${#name} - ${#status} - 12))}" "${color}${status}${reset}"
@@ -65,20 +63,29 @@ do_print_status() {
 }
 
 do_print_progress() {
-    if [[ $logging == y ]]; then
-        if [[ $timeStamp == y ]]; then
-            [[ $1 =~ ^[a-zA-Z] ]] && printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 \
-                "${bold}├${reset} $*..." || printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "$*..."
+    case $logging$timeStamp in
+    n*) set_title "$* in $(get_first_subdir)" ;;
+    yy)
+        if [[ $1 =~ ^[a-zA-Z] ]]; then
+            printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "${bold}├${reset} $*..."
         else
-            [[ $1 =~ ^[a-zA-Z] ]] && echo "${bold}├${reset} $*..." || echo -e "$*..."
+            printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "$*..."
         fi
+        return
+        ;;
+    yn)
+        if [[ $1 =~ ^[a-zA-Z] ]]; then
+            echo "${bold}├${reset} $*..."
+        else
+            echo -e "$*..."
+        fi
+        return
+        ;;
+    esac
+    if [[ $timeStamp == y ]]; then
+        printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "${bold}$* in $(get_first_subdir)${reset}"
     else
-        set_title "$* in $(get_first_subdir)"
-        if [[ $timeStamp == y ]]; then
-            printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "${bold}$* in $(get_first_subdir)${reset}"
-        else
-            echo -e "${bold}$* in $(get_first_subdir)${reset}"
-        fi
+        echo -e "${bold}$* in $(get_first_subdir)${reset}"
     fi
 }
 
@@ -899,7 +906,7 @@ do_changeFFmpegConfig() {
         if enabled cuda-nvcc; then
             local fixed_CUDA_PATH_UNIX
             fixed_CUDA_PATH_UNIX="$(cygpath -u "$CUDA_PATH")"
-            command -v nvcc.exe &> /dev/null || export PATH="$PATH:$fixed_CUDA_PATH_UNIX/bin"
+            nvcc.exe --help &> /dev/null || export PATH="$PATH:$fixed_CUDA_PATH_UNIX/bin"
             echo -e "${orange}FFmpeg and related apps will depend on Nvidia drivers!${reset}"
         fi
     else
@@ -930,7 +937,7 @@ do_changeFFmpegConfig() {
     if [[ $ffmpeg =~ "shared" || $ffmpeg =~ "both" ]]; then
         FFMPEG_OPTS_SHARED=()
         for opt in "${FFMPEG_OPTS[@]}" "${FFMPEG_DEFAULT_OPTS_SHARED[@]}"; do
-            [[ -n $opt ]] && FFMPEG_OPTS_SHARED+=("$opt")
+            FFMPEG_OPTS_SHARED+=("$opt")
         done
     fi
     if [[ $ffmpeg == "bothstatic" ]]; then
@@ -1282,11 +1289,12 @@ do_mesoninstall() {
 
 do_rust() {
     log "rust.update" "$RUSTUP_HOME/bin/cargo.exe" update
-    [[ $ccache == y ]] && {
-        command -v sccache > /dev/null 2>&1 &&
-            export RUSTC_WRAPPER=sccache &&
-            { sccache --start-server > /dev/null 2>&1 || true; }
-    } || unset RUSTC_WRAPPER
+    if [[ $ccache == y ]]; then
+        type sccache > /dev/null 2>&1 &&
+            export RUSTC_WRAPPER=sccache
+    else
+        unset RUSTC_WRAPPER
+    fi
     # use this array to pass additional parameters to cargo
     local rust_extras=()
     extra_script pre rust
@@ -1374,7 +1382,7 @@ log() {
     [[ $quiet ]] || do_print_progress Running "$name"
     [[ $_cmd =~ ^(make|ninja)$ ]] && extra="-j$cpuCount"
     if [[ $logging == "y" ]]; then
-        printf 'CPPFLAGS: %s\nCFLAGS: %s\nCXXFLAGS: %s\nLDFLAGS: %s\n%s %s\n' "$CPPFLAGS" "$CFLAGS" "$CXXFLAGS" "$LDFLAGS" "$_cmd" "$*" > "ab-suite.$name.log"
+        printf 'CPPFLAGS: %s\nCFLAGS: %s\nCXXFLAGS: %s\nLDFLAGS: %s\n%s %s\n' "$CPPFLAGS" "$CFLAGS" "$CXXFLAGS" "$LDFLAGS" "$_cmd${extra:+ $extra}" "$*" > "ab-suite.$name.log"
         $_cmd $extra "$@" >> "ab-suite.$name.log" 2>&1 ||
             { [[ $extra ]] && $_cmd -j1 "$@" >> "ab-suite.$name.log" 2>&1; } ||
             compilation_fail "$name"
@@ -1716,42 +1724,32 @@ get_vs_prefix() {
 }
 
 get_cl_path() {
-    command -v cl.exe &> /dev/null && return 0
+    type cl.exe &> /dev/null && return 0
 
-    local _sys_vswhere
-    local _suite_vswhere="/opt/bin/vswhere.exe"
+    local _suite_vswhere="/opt/bin/vswhere.exe" _sys_vswhere
     _sys_vswhere="$(cygpath -u "$(cygpath -F 0x002a)/Microsoft Visual Studio/Installer/vswhere.exe")"
-    if [[ -f $_sys_vswhere ]]; then
+    if "$_sys_vswhere" -help &> /dev/null; then
         vswhere=$_sys_vswhere
-    elif [[ -f $_suite_vswhere ]]; then
+    elif "$_suite_vswhere" -help &> /dev/null; then
         vswhere=$_suite_vswhere
     else
         pushd "$LOCALBUILDDIR" 2> /dev/null || do_exit_prompt "Did you delete /build?"
         do_wget -c -r -q "https://github.com/Microsoft/vswhere/releases/latest/download/vswhere.exe"
-        [[ -f vswhere.exe ]] || return 1
+        ./vswhere.exe -help &> /dev/null || return 1
         do_install vswhere.exe /opt/bin/
         vswhere=$_suite_vswhere
         popd 2> /dev/null || do_exit_prompt "Did you delete the previous folder?"
     fi
 
-    local installationpath
-    installationpath="$("$vswhere" -latest -property installationPath | tail -n1)"
-    [[ -z $installationpath ]] && return 1
-    # apparently this is MS's official way of knowing the default version ???
-    local _version
-    _version="$(cat "$installationpath/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt")"
-    local _hostbits=HostX64
+    local _hostbits=HostX64 _arch=x64
     [[ "$(uname -m)" != x86_64 ]] && _hostbits=HostX86
-    local _arch=x64
     [[ $bits == 32bit ]] && _arch=x86
 
     local basepath
-    basepath="$(cygpath -u "$installationpath/VC/Tools/MSVC/$_version/bin/$_hostbits/$_arch")"
-    if [[ -f "$basepath/cl.exe" ]]; then
-        export PATH="$basepath:$PATH"
-    else
+    basepath="$("$vswhere" -latest -all -find "VC/Tools/MSVC/*/bin/$_hostbits/$_arch")"
+    "$basepath/cl.exe" /? &> /dev/null &&
+        export PATH="$basepath:$PATH" ||
         return 1
-    fi
 }
 
 get_java_home() {
@@ -1844,11 +1842,7 @@ add_to_remove() {
 }
 
 clean_suite() {
-    if [[ $timeStamp == y ]]; then
-        printf "\\n${purple}%(%H:%M:%S)T${reset} %s\\n" -1 "${orange}Deleting status files...${reset}"
-    else
-        echo -e "\\n\\t${orange}Deleting status files...${reset}"
-    fi
+    do_simple_print -p "${orange}Deleting status files...${reset}"
     cd_safe "$LOCALBUILDDIR" > /dev/null
     find . -maxdepth 2 \( -name recently_updated -o -name recently_checked \) -delete
     find . -maxdepth 2 -regex ".*build_successful\(32\|64\)bit\(_\\w+\)?\$" -delete
@@ -2201,8 +2195,8 @@ verify_cuda_deps() {
         if ! get_cl_path; then
             echo -e "${orange}MSVC cl.exe not found in PATH or through vswhere; needed by nvcc.${reset}"
             do_removeOption --enable-cuda-nvcc
-        elif enabled cuda-nvcc && ! command -v nvcc.exe &> /dev/null &&
-            ! command -v "$(cygpath -sm "$CUDA_PATH")/bin/nvcc.exe" &> /dev/null; then
+        elif enabled cuda-nvcc && ! nvcc.exe --help &> /dev/null &&
+            ! "$(cygpath -sm "$CUDA_PATH")/bin/nvcc.exe" --help &> /dev/null; then
             echo -e "${orange}nvcc.exe not found in PATH or installed in CUDA_PATH.${reset}"
             do_removeOption --enable-cuda-nvcc
         fi
