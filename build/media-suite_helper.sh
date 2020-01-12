@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2154,SC2120,SC2119,SC2034,SC1090,SC1117
+# shellcheck disable=SC2154,SC2120,SC2119,SC2034,SC1090,SC1117,SC2030,SC2031
 
 if [[ ! $cpuCount =~ ^[0-9]+$ ]]; then
     cpuCount="$(($(nproc) / 2))"
@@ -124,166 +124,211 @@ test_newer() {
     return 1
 }
 
-check_valid_vcs() {
-    local root="${1:-.}"
-    local _type="${vcsType:-git}"
-    [[ $_type == "git" && -d "$root"/.git ]] ||
-        [[ $_type == "hg" && -d "$root"/.hg ]] ||
-        [[ $_type == "svn" && -d "$root"/.svn ]]
+# vcs_get_default_ref git
+vcs_get_default_ref() {
+    case ${1:-$(vcs_get_current_type)} in
+    git | svn) echo "HEAD" ;;
+    hg) echo "default" ;;
+    *) return 1 ;;
+    esac
 }
 
-vcs_clone() {
-    set -x
-    if [[ $vcsType == "svn" ]]; then
-        svn checkout -r "$ref" "$vcsURL" "$vcsFolder"-svn
+# vcs_get_current_type /build/myrepo
+vcs_get_current_type() {
+    local basedir
+    basedir=${1:-$(get_first_subdir -f)}
+    if [[ -d $basedir/.git ]] && git -C "$basedir" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+        echo "git"
+    elif [[ -d $basedir/.hg ]] && hg -R "$basedir" id --id > /dev/null 2>&1; then
+        echo "hg"
+    elif [[ -d $basedir/.svn ]] && svn info --depth empty "$basedir@HEAD" > /dev/null 2>&1; then
+        echo "svn"
     else
-        "$vcsType" clone "$vcsURL" "$vcsFolder-$vcsType"
+        echo "unknown"
+        return 1
     fi
-    set +x
-    check_valid_vcs "$vcsFolder-$vcsType"
 }
 
-vcs_reset() {
-    local ref="$1"
-    check_valid_vcs
+# check_valid_vcs /build/ffmpeg-git git
+check_valid_vcs() {
+    case ${2:-$(vcs_get_current_type "$1")} in
+    git) [[ -d ${1:-$PWD}/.git ]] ;; # && git -C "${1:-$PWD}" fsck --no-progress ;;
+    hg) [[ -d ${1:-$PWD}/.hg ]] ;;   # && hg verify -q ;;
+    svn) [[ -d ${1:-$PWD}/.svn ]] ;;
+    *) return 1 ;;
+    esac
+}
+
+# vcs_get_current_head /build/ffmpeg-git git
+vcs_get_current_head() {
+    case ${2:-$(vcs_get_current_type "$1")} in
+    git) git -C "${1:-$PWD}" rev-parse HEAD ;;
+    hg) hg -R "${1:-$PWD}" identify --id ;;
+    svn) svn info --show-item last-changed-revision "${1:-$PWD}" ;;
+    *) return 1 ;;
+    esac
+}
+
+# vcs_test_remote "svn://svn.mplayerhq.hu/mplayer/trunk" svn
+vcs_test_remote() {
+    case $2 in # Need to find a good way to detect remote vcs type. GitHub provides svn and git from the same url.
+    git) GIT_TERMINAL_PROMPT=0 git ls-remote --refs "$1" ;;
+    hg) hg --noninteractive identify "$1" ;;
+    svn) svn --non-interactive ls "$1" ;;
+    *) return 1 ;;
+    esac > /dev/null 2>&1
+}
+
+# vcs_clone https://gitlab.com/libtiff/libtiff.git tiff v4.1.0
+vcs_clone() (
     set -x
-    if [[ $vcsType == svn ]]; then
-        svn revert --recursive .
-        oldHead=$(svnversion)
-    elif [[ $vcsType == hg ]]; then
-        hg update -C -r "$ref"
-        oldHead=$(hg id --id)
-    elif [[ $vcsType == git ]]; then
-        [[ -n $vcsURL ]] && git remote set-url origin "$vcsURL"
+    vcsURL=${1:-$vcsURL} vcsFolder=${2:-$vcsFolder} ref=${3:-$ref} vcsType="${4:-${vcsType:-git}}"
+    [[ -z $vcsURL ]] && return 1
+    [[ -z $vcsFolder ]] && vcsFolder=${vcsURL##*/} && vcsFolder=${vcsFolder%.git}
+    : "${ref:=$(vcs_get_default_ref "$vcsType")}"
+
+    if (check_valid_vcs "$vcsFolder-$vcsType" "$vcsType") > /dev/null 2>&1; then
+        return 0
+    else
+        rm -rf "$vcsFolder-$vcsType"
+        case $vcsType in
+        git)
+            if [[ $- == *i* ]]; then
+                unset GIT_TERMINAL_PROMPT
+            else
+                export GIT_TERMINAL_PROMPT=0
+            fi
+            git clone "$vcsURL" "$vcsFolder-$vcsType"
+            git -C "$vcsFolder-$vcsType" reset --hard "$ref"
+            ;;
+        hg) hg clone -r "$ref" "$vcsURL" "$vcsFolder-$vcsType" ;;
+        svn) svn checkout -r "$ref" "$vcsURL" "$vcsFolder"-svn ;;
+        *) return 1 ;;
+        esac
+    fi
+    check_valid_vcs "$PWD/$vcsFolder-$vcsType" "$vcsType"
+)
+
+vcs_reset() (
+    set -x
+    case ${2:-$(vcs_get_current_type)} in
+    git)
+        git config remote.origin.url > /dev/null 2>&1 ||
+            [[ -n $vcsURL ]] && git remote set-url origin "$vcsURL"
         git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-        [[ -f .git/refs/heads/ab-suite ]] || git branch -f --no-track ab-suite
-        git checkout ab-suite
-        git reset --hard "$(vcs_getlatesttag "$ref")"
-        oldHead=$(git rev-parse HEAD)
-    fi
-    set +x
-}
+        git checkout --no-track -fB ab-suite
+        git reset --hard "$(vcs_get_latest_tag "$1")"
+        ;;
+    hg) hg update -C -r "$1" ;;
+    svn) svn revert --recursive . ;;
+    *) return 1 ;;
+    esac
+)
 
-vcs_update() {
-    local ref="$1"
-    check_valid_vcs
+vcs_update() (
     set -x
-    if [[ $vcsType == svn ]]; then
-        svn update -r "$ref"
-        newHead=$(svnversion)
-    elif [[ $vcsType == hg ]]; then
-        hg pull
-        hg update -C -r "$ref"
-        newHead=$(hg id --id)
-    elif [[ $vcsType == git ]]; then
+    case ${2:-$(vcs_get_current_type)} in
+    git)
         local unshallow
-        [[ -f .git/shallow ]] && unshallow="--unshallow"
+        [[ -f $(git rev-parse --git-dir)/shallow ]] && unshallow="--unshallow"
         git fetch -t $unshallow origin
-        ref="$(vcs_getlatesttag "$ref")"
-        git reset --hard "$ref"
-        newHead=$(git rev-parse HEAD)
-    fi
-    set +x
-}
+        git reset --hard "$(vcs_get_latest_tag "$1")"
+        ;;
+    hg)
+        hg pull
+        hg update -C -r "$1"
+        ;;
+    svn) svn update -r "$1" ;;
+    *) return 1 ;;
+    esac
+)
 
+# vcs_log d4996a600ca0334235a4b66beae5b5c3474535c4 81172b5e3ac0d3130ff7b639ed7efed5baa1195c
+# Defaults to last 5 commits
 vcs_log() {
-    check_valid_vcs
-    if [[ $vcsType == "git" ]]; then
-        git log --no-merges --pretty="%ci: %an - %h%n    %s" \
-            "$oldHead".."$newHead" >> "$LOCALBUILDDIR"/newchangelog
-    elif [[ $vcsType == "hg" ]]; then
-        hg log --template '{date|localdate|isodatesec}: {author|person} - {node|short}\n    {desc|firstline}\n' \
-            -r "reverse($oldHead:$newHead)" >> "$LOCALBUILDDIR"/newchangelog
-    fi
+    case ${3:-$(vcs_get_current_type)} in
+    git) git log --no-merges --pretty="%ci: %an - %h%n    %s" \
+        "${1:-HEAD~5}".."${2:-HEAD}" ;;
+    hg) hg log --template '{date|localdate|isodatesec}: {author|person} - {node|short}\n    {desc|firstline}\n' \
+        -r "reverse(${1:--5}:${2:-tip})" ;;
+    svn) ;; # No easy way to generate a svn changelog with the same format. Plus it's really only mplayer.
+    # Maybe use svn log --xml and format xml
+    *) return 1 ;;
+    esac
 }
 
-vcs_getlatesttag() {
-    local ref="$1"
-    if [[ -n $vcsType && $vcsType != git ]]; then
-        echo "$ref"
-        return
+# vcs_get_latest_tag "libopenmpt-*"
+vcs_get_latest_tag() (
+    if ! {
+        [[ ${vcsType:=${2:-$(vcs_get_current_type)}} == git ]] &&
+            case ${1:-unknown} in
+            LATEST) git describe --abbrev=0 --tags "$(git rev-list --tags --max-count=1)" ;;
+            GREATEST) git describe --abbrev=0 --tags ;;
+            *\**) git describe --abbrev=0 --tags "$(git tag -l "$1" --sort=-version:refname | head -1)" ;;
+            *) false ;;
+            esac 2> /dev/null
+    } then
+        echo "$1"
     fi
-    local tag
-    if [[ $ref == "LATEST" ]]; then
-        tag="$(git describe --abbrev=0 --tags "$(git rev-list --tags --max-count=1)")"
-    elif [[ $ref == "GREATEST" ]]; then
-        tag="$(git describe --abbrev=0 --tags)"
-    elif [[ ${ref//\*/} != "$ref" ]]; then
-        tag="$(git describe --abbrev=0 --tags "$(git tag -l "$ref" | sort -Vr | head -1)")"
-    fi
-    echo "${tag:-${ref}}"
+)
+
+# do_mabs_clone "$vcsURL" "$vcsFolder" "$ref" "$vcsType"
+# For internal use for fallback links
+do_mabs_clone() {
+    vcs_test_remote "$1" "$4" &&
+        log -qe "$4.clone" vcs_clone "$1" "$2" "$3" "$4" ||
+        vcs_test_remote "https://gitlab.com/m-ab-s/${1##*/}" "$4" &&
+        log -qe "$4.clone" vcs_clone "https://gitlab.com/m-ab-s/${1##*/}" "$2" "$3" "git"
+    check_valid_vcs "$2-$4" "$4"
 }
 
 # get source from VCS
 # example:
 #   do_vcs "url#branch|revision|tag|commit=NAME" "folder"
 do_vcs() {
-    local vcsType="${1%::*}"
-    local vcsURL="${1#*::}"
-    [[ $vcsType == "$vcsURL" ]] && vcsType="git"
-    local vcsBranch="${vcsURL#*#}"
-    [[ $vcsBranch == "$vcsURL" ]] && vcsBranch=""
-    local vcsFolder="$2"
-    local vcsCheck=("${_check[@]}")
+    local vcsType="${1%::*}" vcsURL="${1#*::}" vcsFolder="$2" vcsCheck=("${_check[@]}") vcsBranch="${vcsURL#*#}" ref
     local deps=("${_deps[@]}") && unset _deps
-    local ref
-    if [[ $vcsBranch ]]; then
-        vcsURL="${vcsURL%#*}"
-        case ${vcsBranch%%=*} in
-        commit | tag | revision)
-            ref=${vcsBranch##*=}
-            ;;
-        branch)
-            ref=${vcsBranch##*=}
-            [[ $vcsType == git && $ref == "${ref%/*}" ]] && ref=origin/$ref
-            ;;
-        esac
-    else
-        if [[ $vcsType == git ]]; then
-            ref="origin/HEAD"
-        elif [[ $vcsType == hg ]]; then
-            ref="default"
-        elif [[ $vcsType == svn ]]; then
-            ref="HEAD"
-        fi
+    [[ $vcsType == "$vcsURL" ]] && vcsType="git"
+    [[ $vcsBranch == "$vcsURL" ]] && vcsBranch=""
+    ref=$(vcs_get_default_ref "$vcsType")
+    vcsURL="${vcsURL%#*}"
+    [[ -z $vcsFolder ]] && vcsFolder="${vcsURL##*/}" && vcsFolder="${vcsFolder%.*}"
+
+    if [[ -n $vcsBranch ]]; then
+        ref=${vcsBranch##*=}
+        [[ ${vcsBranch%%=*} == branch && $vcsType == git && $ref == "${ref%/*}" ]] && ref=origin/$ref
     fi
-    [[ ! $vcsFolder ]] && vcsFolder="${vcsURL##*/}" && vcsFolder="${vcsFolder%.*}"
 
     cd_safe "$LOCALBUILDDIR"
-    if [[ ! -d "$vcsFolder-$vcsType" ]]; then
+
+    if ! check_valid_vcs "$vcsFolder-$vcsType" "$vcsType"; then
+        rm -rf "$vcsFolder-$vcsType"
         do_print_progress "  Running $vcsType clone for $vcsFolder"
-        if ! log -q "$vcsType.clone" vcs_clone && [[ $vcsType == git ]] &&
-            [[ $vcsURL != *"media-autobuild_suite-dependencies"* ]]; then
-            local repoName=${vcsURL##*/}
-            vcsURL="https://gitlab.com/media-autobuild_suite-dependencies/${repoName}"
-            log -q "$vcsType.clone" vcs_clone ||
-                do_exit_prompt "Failed cloning to $vcsFolder-$vcsType"
-        fi
-        if [[ -d "$vcsFolder-$vcsType" ]]; then
-            cd_safe "$vcsFolder-$vcsType"
-            touch recently_updated recently_checked
+        if do_mabs_clone "$vcsURL" "$vcsFolder" "$ref" "$vcsType"; then
+            touch "$vcsFolder-$vcsType"/recently_{updated,checked}
         else
             echo "$vcsFolder $vcsType seems to be down"
             echo "Try again later or <Enter> to continue"
             do_prompt "if you're sure nothing depends on it."
             return
         fi
-    else
-        cd_safe "$vcsFolder-$vcsType"
     fi
 
-    if [[ $ffmpegUpdate == onlyFFmpeg ]] &&
-        [[ $vcsFolder != ffmpeg ]] && [[ $vcsFolder != mpv ]] &&
+    cd_safe "$vcsFolder-$vcsType"
+
+    if [[ $ffmpegUpdate == onlyFFmpeg && $vcsFolder != ffmpeg && $vcsFolder != mpv ]] &&
         { { [[ -z ${vcsCheck[*]} ]] && files_exist "$vcsFolder.pc"; } ||
             { [[ -n ${vcsCheck[*]} ]] && files_exist "${vcsCheck[@]}"; }; }; then
         do_print_status "${vcsFolder} ${vcsType}" "$green" "Already built"
         return 1
     fi
 
-    log -q "$vcsType.reset" vcs_reset "$ref" || do_exit_prompt "Failed resetting in $vcsFolder-$vcsType"
+    log -q "$vcsType.reset" vcs_reset "$ref"
+    oldHead=$(vcs_get_current_head)
     if ! [[ -f recently_checked && recently_checked -nt "$LOCALBUILDDIR"/last_run ]]; then
         do_print_progress "  Running $vcsType update for $vcsFolder"
-        log -q "$vcsType.update" vcs_update "$ref" || do_exit_prompt "Failed updating in $vcsFolder-$vcsType"
+        log -q "$vcsType.update" vcs_update "$ref"
+        newHead=$(vcs_get_current_head)
         touch recently_checked
     else
         newHead="$oldHead"
@@ -295,16 +340,18 @@ do_vcs() {
     if [[ $oldHead != "$newHead" || -f custom_updated ]]; then
         touch recently_updated
         rm -f ./build_successful{32,64}bit{,_*}
-        if [[ $build32 == "yes" && $build64 == "yes" && $bits == "64bit" ]]; then
+        if [[ $build32$build64$bits == "yesyes64bit" ]]; then
             new_updates="yes"
             new_updates_packages="$new_updates_packages [$vcsFolder]"
         fi
-        echo "$vcsFolder" >> "$LOCALBUILDDIR"/newchangelog
-        vcs_log
-        echo >> "$LOCALBUILDDIR"/newchangelog
+        {
+            echo "$vcsFolder"
+            vcs_log "$oldHead" "$newHead"
+            echo
+        } >> "$LOCALBUILDDIR"/newchangelog
         do_print_status "┌ ${vcsFolder} ${vcsType}" "$orange" "Updates found"
-    elif [[ -f recently_updated ]] && { [[ ! -f "build_successful$bits" ]] ||
-        [[ -n $flavor && ! -f "build_successful${bits}_${flavor}" ]]; }; then
+    elif [[ -f recently_updated ]] &&
+        [[ ! -f build_successful$bits || -n $flavor && ! -f build_successful${bits}_${flavor} ]]; then
         do_print_status "┌ ${vcsFolder} ${vcsType}" "$orange" "Recently updated"
     elif [[ -n ${vcsCheck[*]} ]] && ! files_exist "${vcsCheck[@]}"; then
         do_print_status "┌ ${vcsFolder} ${vcsType}" "$orange" "Files missing"
@@ -597,7 +644,7 @@ do_checkIfExist() {
         [[ $build32 == yes || $build64 == yes ]] && [[ -d $packageDir ]] &&
             rm -f "$buildSuccessFile"
         do_print_status "└ $packetName" "$red" "Failed"
-        if [[ $_notrequired ]]; then
+        if ${_notrequired:-false}; then
             printf '%s\n' \
                 "$orange"'Package failed to build, but is not required; proceeding with compilation.'"$reset"
         else
@@ -1308,23 +1355,18 @@ do_rust() {
 }
 
 compilation_fail() {
-    [[ -z $build32 || -z $build64 ]] && return 1
+    [[ -z $build32$build64 ]] && return 1
     local reason="$1"
     local operation="${reason,,}"
-    if [[ $_notrequired ]]; then
-        if [[ $logging == y ]]; then
-            echo "Likely error (tail of the failed operation logfile):"
-            tail "ab-suite.${operation}.log"
-            echo "${red}$reason failed. Check $(pwd -W)/ab-suite.$operation.log${reset}"
-        fi
+    if [[ $logging == y ]]; then
+        echo "Likely error (tail of the failed operation logfile):"
+        tail "ab-suite.${operation}.log"
+        echo "${red}$reason failed. Check $(pwd -W)/ab-suite.$operation.log${reset}"
+    fi
+    if ${_notrequired:-false}; then
         echo "This isn't required for anything so we can move on."
         return 1
     else
-        if [[ $logging == y ]]; then
-            echo "Likely error (tail of the failed operation logfile):"
-            tail "ab-suite.${operation}.log"
-            echo "${red}$reason failed. Check $(pwd -W)/ab-suite.$operation.log${reset}"
-        fi
         echo "${red}This is required for other packages, so this script will exit.${reset}"
         create_diagnostic
         zip_logs
@@ -1338,38 +1380,38 @@ strip_ansi() {
     local txtfile newfile
     for txtfile; do
         [[ $txtfile != "${txtfile//stripped/}" ]] && continue
-        local name="${txtfile%.*}"
-        local ext="${txtfile##*.}"
-        [[ $txtfile != "$name" ]] && newfile="${name}.stripped.${ext}" || newfile="${txtfile}-stripped"
-        sed -r 's#(\x1B[\[\(]([0-9][0-9]?)?[mBHJ]|\x07|\x1B]0;)##g;s/^[0-9]{2}:[0-9]{2}:[0-9]{2}//' "$txtfile" > "${newfile}"
+        local name="${txtfile%.*}" ext="${txtfile##*.}"
+        [[ $txtfile != "$name" ]] &&
+            newfile="$name.stripped.$ext" || newfile="$txtfile-stripped"
+        sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$txtfile" > "$newfile"
     done
 }
 
 zip_logs() {
-    local failed url files
-    failed="$(get_first_subdir)"
-    pushd "$LOCALBUILDDIR" > /dev/null || do_exit_prompt "Did you delete /build?"
-    rm -f logs.zip
-    strip_ansi ./*.log
-    files=(/trunk/media-autobuild_suite.bat)
-    local option
-    [[ $failed ]] && mapfile -t -O "${#files[@]}" files < <(
-        find "$failed" -name "*.log"
+    local failed url
+    failed=$(get_first_subdir)
+    strip_ansi "$LOCALBUILDDIR"/*.log
+    rm -f "$LOCALBUILDDIR/logs.zip"
+    (
+        cd "$LOCALBUILDDIR" > /dev/null || do_exit_prompt "Did you delete /build?"
+        {
+            echo /trunk/media-autobuild_suite.bat
+            [[ $failed != . ]] && find "$failed" -name "*.log"
+            find . -maxdepth 1 -name "*.stripped.log" -o -name "*_options.txt" -o -name "media-suite_*.sh" \
+                -o -name "last_run" -o -name "media-autobuild_suite.ini" -o -name "diagnostics.txt" -o -name "patchedFolders"
+        } | sort -uo failedFiles
+        7za -mx=9 a logs.zip -- @failedFiles > /dev/null && rm failedFiles
     )
-    mapfile -t -O "${#files[@]}" files < <(
-        find . -maxdepth 1 -name "*.stripped.log" -o -name "*_options.txt" -o -name "media-suite_*.sh" \
-            -o -name "last_run" -o -name "media-autobuild_suite.ini" -o -name "diagnostics.txt" -o -name "patchedFolders"
-    )
-    7za -mx=9 a logs.zip "${files[@]}" > /dev/null
-    [[ ! -f "$LOCALBUILDDIR/no_logs" ]] && [[ -n "$build32$build64" ]] &&
-        url="$(/usr/bin/curl -sF'file=@logs.zip' https://0x0.st)"
-    popd > /dev/null || do_exit_prompt "Did you delete the previous folder?"
+    [[ ! -f $LOCALBUILDDIR/no_logs && -n $build32$build64 ]] &&
+        url="$(cd "$LOCALBUILDDIR" && /usr/bin/curl -sF'file=@logs.zip' https://0x0.st)"
     echo
     if [[ $url ]]; then
         echo "${green}All relevant logs have been anonymously uploaded to $url"
         echo "${green}Copy and paste ${red}[logs.zip]($url)${green} in the GitHub issue.${reset}"
     elif [[ -f "$LOCALBUILDDIR/logs.zip" ]]; then
         echo "${green}Attach $(cygpath -w "$LOCALBUILDDIR/logs.zip") to the GitHub issue.${reset}"
+    else
+        echo "${red}Failed to generate logs.zip!${reset}"
     fi
 }
 
@@ -1897,18 +1939,20 @@ clean_suite() {
 create_diagnostic() {
     local cmd cmds=("uname -a" "pacman -Qe" "pacman -Qd")
     local _env envs=(MINGW_{PACKAGE_PREFIX,CHOST,PREFIX} MSYSTEM CPATH
-        LIBRARY_PATH {LD,C,CPP,CXX}FLAGS)
+        LIBRARY_PATH {LD,C,CPP,CXX}FLAGS PATH)
     do_print_progress "  Creating diagnostics file"
-    [[ -d /trunk/.git ]] && cmds+=("git -C /trunk log -1 --pretty=%h")
-    rm -f "$LOCALBUILDDIR/diagnostics.txt"
-    echo "Env variables:" >> "$LOCALBUILDDIR/diagnostics.txt"
-    for _env in "${envs[@]}"; do
-        printf '\t%s=%s\n' "$_env" "${!_env}" >> "$LOCALBUILDDIR/diagnostics.txt"
-    done
-    echo >> "$LOCALBUILDDIR/diagnostics.txt"
-    for cmd in "${cmds[@]}"; do
-        printf '\t%s\n%s\n\n' "$cmd" "$($cmd)" >> "$LOCALBUILDDIR/diagnostics.txt"
-    done
+    git -C /trunk rev-parse --is-inside-work-tree > /dev/null 2>&1 &&
+        cmds+=("git -C /trunk log -1 --pretty=%h")
+    {
+        echo "Env variables:"
+        for _env in "${envs[@]}"; do
+            printf '\t%s=%s\n' "$_env" "${!_env}"
+        done
+        echo
+        for cmd in "${cmds[@]}"; do
+            printf '\t%s\n%s\n\n' "$cmd": "$($cmd)"
+        done
+    } > "$LOCALBUILDDIR/diagnostics.txt"
 }
 
 create_winpty_exe() {
