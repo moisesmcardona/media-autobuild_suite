@@ -127,7 +127,8 @@ test_newer() {
 # vcs_get_default_ref git
 vcs_get_default_ref() {
     case ${1:-$(vcs_get_current_type)} in
-    git | svn) echo "HEAD" ;;
+    git) echo "origin/HEAD" ;;
+    svn) echo "HEAD" ;;
     hg) echo "default" ;;
     *) return 1 ;;
     esac
@@ -286,7 +287,8 @@ do_mabs_clone() {
 # example:
 #   do_vcs "url#branch|revision|tag|commit=NAME" "folder"
 do_vcs() {
-    local vcsType="${1%::*}" vcsURL="${1#*::}" vcsFolder="$2" vcsCheck=("${_check[@]}") vcsBranch="${vcsURL#*#}" ref
+    local vcsType="${1%::*}" vcsURL="${1#*::}" vcsFolder="$2" vcsCheck=("${_check[@]}")
+    local vcsBranch="${vcsURL#*#}" ref
     local deps=("${_deps[@]}") && unset _deps
     [[ $vcsType == "$vcsURL" ]] && vcsType="git"
     [[ $vcsBranch == "$vcsURL" ]] && vcsBranch=""
