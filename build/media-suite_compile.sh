@@ -992,6 +992,18 @@ else
     pc_exists vpx || do_removeOption --enable-libvpx
 fi
 
+_check=(libvmaf.{a,pc} libvmaf/libvmaf.h)
+if [[ $bits = 32bit ]]; then
+    do_removeOption --enable-libvmaf
+elif [[ $ffmpeg != "no" ]] && enabled libvmaf &&
+    do_vcs "https://github.com/Netflix/vmaf.git"; then
+    do_uninstall share/model "${_check[@]}"
+    cd_safe libvmaf
+    do_mesoninstall video
+    do_checkIfExist
+fi
+file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
+
 [[ $aom = y || $standalone = y ]] && _aom_bins=y
 _check=(libaom.a aom.pc)
 [[ -n $_aom_bins ]] && _check+=(bin-video/aomenc.exe)
@@ -1006,6 +1018,7 @@ if { [[ $aom = y ]] || { [[ $ffmpeg != "no" ]] && enabled libaom; }; } &&
     else
         extracommands+=("-DENABLE_EXAMPLES=off")
     fi
+    [[ $ffmpeg != "no" ]] && enabled libvmaf && extracommands+=("-DCONFIG_TUNE_VMAF=1")
     do_uninstall include/aom "${_check[@]}"
     get_external_opts extracommands
     do_cmakeinstall video -DENABLE_{DOCS,TOOLS}=off -DENABLE_TEST{S,DATA}=OFF \
@@ -1616,19 +1629,6 @@ if enabled libxvid && [[ $standalone = y ]] && ! { files_exist "${_check[@]}" &&
     do_checkIfExist
 fi
 
-_check=(libvmaf.{a,pc} libvmaf/libvmaf.h)
-if [[ $bits = 32bit ]]; then
-    do_removeOption --enable-libvmaf
-elif [[ $ffmpeg != "no" ]] && enabled libvmaf &&
-    do_vcs "https://github.com/Netflix/vmaf.git"; then
-    do_uninstall share/model "${_check[@]}"
-    cd_safe libvmaf
-    do_mesoninstall video
-    do_checkIfExist
-fi
-grep_or_sed lstdc "$(file_installed libvmaf.pc)" 's;Libs.private.*;& -lstdc++;'
-file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
-
 _check=(ffnvcodec/nvEncodeAPI.h ffnvcodec.pc)
 if [[ $ffmpeg != "no" ]] && { enabled ffnvcodec ||
     ! disabled_any ffnvcodec autodetect || ! mpv_disabled cuda-hwaccel; } &&
@@ -1877,7 +1877,7 @@ if [[ $ffmpeg != "no" ]]; then
         fi
 
         if enabled openal; then
-            do_patch "https://gist.githubusercontent.com/Helenerineium/406d836f81f99a0656bdaf885265ca2e/raw/openal-pkgconfig.patch" ||
+            do_patch "https://gist.githubusercontent.com/1480c1/7c0f77957bd8ec8a03987dee95651029/raw/openal-pkgconfig.patch" ||
                 {
                     do_removeOption "--enable-openal"
                     do_removeOption FFMPEG_OPTS_SHARED "--enable-openal"
