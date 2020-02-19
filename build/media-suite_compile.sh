@@ -2,8 +2,7 @@
 # shellcheck disable=SC2034,SC1090,SC1117,SC1091,SC2119
 shopt -s extglob
 
-FFMPEG_BASE_OPTS=("--pkg-config-flags=--static")
-if [[ x"$LOCALBUILDDIR" = "x" ]]; then
+if [[ -z $LOCALBUILDDIR ]]; then
     printf '%s\n' \
         "Something went wrong." \
         "MSYSTEM: $MSYSTEM" \
@@ -14,62 +13,63 @@ if [[ x"$LOCALBUILDDIR" = "x" ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
+FFMPEG_BASE_OPTS=("--pkg-config-flags=--static")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
 
 while true; do
-  case $1 in
---cpuCount=* ) cpuCount="${1#*=}"; shift ;;
---build32=* ) build32="${1#*=}"; shift ;;
---build64=* ) build64="${1#*=}"; shift ;;
---mp4box=* ) mp4box="${1#*=}"; shift ;;
---rtmpdump=* ) rtmpdump="${1#*=}"; shift ;;
---vpx=* ) vpx="${1#*=}"; shift ;;
---x264=* ) x264="${1#*=}"; shift ;;
---x265=* ) x265="${1#*=}"; shift ;;
---other265=* ) other265="${1#*=}"; shift ;;
---flac=* ) flac="${1#*=}"; shift ;;
---fdkaac=* ) fdkaac="${1#*=}"; shift ;;
---mediainfo=* ) mediainfo="${1#*=}"; shift ;;
---sox=* ) sox="${1#*=}"; shift ;;
---ffmpeg=* ) ffmpeg="${1#*=}"; shift ;;
---ffmpegUpdate=* ) ffmpegUpdate="${1#*=}"; shift ;;
---ffmpegChoice=* ) ffmpegChoice="${1#*=}"; shift ;;
---mplayer=* ) mplayer="${1#*=}"; shift ;;
---mpv=* ) mpv="${1#*=}"; shift ;;
---deleteSource=* ) deleteSource="${1#*=}"; shift ;;
---license=* ) license="${1#*=}"; shift ;;
---standalone=* ) standalone="${1#*=}"; shift ;;
---stripping* ) stripping="${1#*=}"; shift ;;
---packing* ) packing="${1#*=}"; shift ;;
---logging=* ) logging="${1#*=}"; shift ;;
---bmx=* ) bmx="${1#*=}"; shift ;;
---aom=* ) aom="${1#*=}"; shift ;;
---faac=* ) faac="${1#*=}"; shift ;;
---ffmbc=* ) ffmbc="${1#*=}"; shift ;;
---curl=* ) curl="${1#*=}"; shift ;;
---cyanrip=* ) cyanrip="${1#*=}"; shift ;;
---redshift=* ) redshift="${1#*=}"; shift ;;
---ripgrep=* ) ripgrep="${1#*=}"; shift ;;
---rav1e=* ) rav1e="${1#*=}"; shift ;;
---dav1d=* ) dav1d="${1#*=}"; shift ;;
---vvc=* ) vvc="${1#*=}"; shift ;;
---jq=* ) jq="${1#*=}"; shift ;;
---jo=* ) jo="${1#*=}"; shift ;;
---dssim=* ) dssim="${1#*=}"; shift ;;
---avs2=* ) avs2="${1#*=}"; shift ;;
---timeStamp=* ) timeStamp="${1#*=}"; shift ;;
---noMintty=* ) noMintty="${1#*=}"; [ -f "$LOCALBUILDDIR/fail.var" ] && rm "$LOCALBUILDDIR/fail.var"; (declare -p | grep -vE "BASH|LINES|COLUMNS|CommonProgramFiles") > "$LOCALBUILDDIR/old.var"; shift ;;
---ccache=* ) ccache="${1#*=}"; shift ;;
---svthevc=* ) svthevc="${1#*=}"; shift ;;
---svtav1=* ) svtav1="${1#*=}"; shift ;;
---svtvp9=* ) svtvp9="${1#*=}"; shift ;;
---xvc=* ) xvc="${1#*=}"; shift ;;
-    -- ) shift; break ;;
-    -* ) echo "Error, unknown option: '$1'."; exit 1 ;;
+    case $1 in
+    --cpuCount=* ) cpuCount=${1#*=} && shift ;;
+    --build32=* ) build32=${1#*=} && shift ;;
+    --build64=* ) build64=${1#*=} && shift ;;
+    --mp4box=* ) mp4box=${1#*=} && shift ;;
+    --rtmpdump=* ) rtmpdump=${1#*=} && shift ;;
+    --vpx=* ) vpx=${1#*=} && shift ;;
+    --x264=* ) x264=${1#*=} && shift ;;
+    --x265=* ) x265=${1#*=} && shift ;;
+    --other265=* ) other265=${1#*=} && shift ;;
+    --flac=* ) flac=${1#*=} && shift ;;
+    --fdkaac=* ) fdkaac=${1#*=} && shift ;;
+    --mediainfo=* ) mediainfo=${1#*=} && shift ;;
+    --sox=* ) sox=${1#*=} && shift ;;
+    --ffmpeg=* ) ffmpeg=${1#*=} && shift ;;
+    --ffmpegUpdate=* ) ffmpegUpdate=${1#*=} && shift ;;
+    --ffmpegChoice=* ) ffmpegChoice=${1#*=} && shift ;;
+    --mplayer=* ) mplayer=${1#*=} && shift ;;
+    --mpv=* ) mpv=${1#*=} && shift ;;
+    --deleteSource=* ) deleteSource=${1#*=} && shift ;;
+    --license=* ) license=${1#*=} && shift ;;
+    --standalone=* ) standalone=${1#*=} && shift ;;
+    --stripping* ) stripping=${1#*=} && shift ;;
+    --packing* ) packing=${1#*=} && shift ;;
+    --logging=* ) logging=${1#*=} && shift ;;
+    --bmx=* ) bmx=${1#*=} && shift ;;
+    --aom=* ) aom=${1#*=} && shift ;;
+    --faac=* ) faac=${1#*=} && shift ;;
+    --ffmbc=* ) ffmbc=${1#*=} && shift ;;
+    --curl=* ) curl=${1#*=} && shift ;;
+    --cyanrip=* ) cyanrip=${1#*=} && shift ;;
+    --redshift=* ) redshift=${1#*=} && shift ;;
+    --ripgrep=* ) ripgrep=${1#*=} && shift ;;
+    --rav1e=* ) rav1e=${1#*=} && shift ;;
+    --dav1d=* ) dav1d=${1#*=} && shift ;;
+    --vvc=* ) vvc=${1#*=} && shift ;;
+    --jq=* ) jq=${1#*=} && shift ;;
+    --jo=* ) jo=${1#*=} && shift ;;
+    --dssim=* ) dssim=${1#*=} && shift ;;
+    --avs2=* ) avs2=${1#*=} && shift ;;
+    --timeStamp=* ) timeStamp=${1#*=} && shift ;;
+    --noMintty=* ) noMintty=${1#*=} && shift ;;
+    --ccache=* ) ccache=${1#*=} && shift ;;
+    --svthevc=* ) svthevc=${1#*=} && shift ;;
+    --svtav1=* ) svtav1=${1#*=} && shift ;;
+    --svtvp9=* ) svtvp9=${1#*=} && shift ;;
+    --xvc=* ) xvc=${1#*=} && shift ;;
+    -- ) shift && break ;;
+    -* ) echo "Error, unknown option: '$1'." && exit 1 ;;
     * ) break ;;
-  esac
+    esac
 done
 
 [[ $ccache != y ]] && export CCACHE_DISABLE=1
@@ -173,15 +173,6 @@ if [[ $ripgrep = y || $rav1e = y || $dssim = y ]] || enabled librav1e; then
     log rustup_update "$RUSTUP_HOME/bin/rustup.exe" update
     log set_default_toolchain "$RUSTUP_HOME/bin/rustup.exe" default \
         "stable-$CARCH-pc-windows-gnu"
-
-    _check=(bin/sccache.exe)
-    if [[ $ccache = y ]] && do_vcs "https://github.com/mozilla/sccache.git"; then
-        do_rust
-        sccache --stop-server >/dev/null 2>&1 || true
-        do_install "target/$CARCH-pc-windows-gnu/release/sccache.exe" bin/
-        do_checkIfExist
-        export RUSTC_WRAPPER=sccache
-    fi
 fi
 
 _check=(bin-global/rg.exe)
@@ -468,7 +459,8 @@ fi
 unset _deps
 
 _check=(libtiff{.a,-4.pc})
-if [[ $ffmpeg != "no" || $standalone = y ]] && enabled_any libtesseract libwebp &&
+if { { [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; } ||
+    { [[ $standalone = y ]] && enabled libwebp; }; } &&
     do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
     do_pacman_install libjpeg-turbo xz zlib zstd
     do_uninstall "${_check[@]}"

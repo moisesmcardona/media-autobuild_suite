@@ -2,9 +2,9 @@
 # shellcheck disable=SC2154,SC2120,SC2119,SC2034,SC1090,SC1117,SC2030,SC2031
 
 if [[ ! $cpuCount =~ ^[0-9]+$ ]]; then
-    cpuCount="$(($(nproc) / 2))"
+    cpuCount=$(($(nproc) / 2))
 fi
-bits="${bits:-64bit}"
+: "${bits:=64bit}"
 curl_opts=(/usr/bin/curl --connect-timeout 15 --retry 3
     --retry-delay 5 --silent --location --insecure --fail)
 
@@ -64,44 +64,34 @@ do_print_status() {
 
 do_print_progress() {
     case $logging$timeStamp in
-    n*) set_title "$* in $(get_first_subdir)" ;;
-    yy)
-        if [[ $1 =~ ^[a-zA-Z] ]]; then
-            printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "${bold}├${reset} $*..."
-        else
-            printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "$*..."
-        fi
-        return
-        ;;
+    yy) printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "$([[ $1 =~ ^[a-zA-Z] ]] && echo "${bold}├${reset} ")$*..." ;;
     yn)
-        if [[ $1 =~ ^[a-zA-Z] ]]; then
-            echo "${bold}├${reset} $*..."
+        [[ $1 =~ ^[a-zA-Z] ]] &&
+            printf '%s' "${bold}├${reset} "
+        echo -e "$*..."
+        ;;
+    *)
+        set_title "$* in $(get_first_subdir)"
+        if [[ $timeStamp == y ]]; then
+            printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "${bold}$* in $(get_first_subdir)${reset}"
         else
-            echo -e "$*..."
+            echo -e "${bold}$* in $(get_first_subdir)${reset}"
         fi
-        return
         ;;
     esac
-    if [[ $timeStamp == y ]]; then
-        printf "${purple}"'%(%H:%M:%S)T'"${reset}"' %s\n' -1 "${bold}$* in $(get_first_subdir)${reset}"
-    else
-        echo -e "${bold}$* in $(get_first_subdir)${reset}"
-    fi
 }
 
 set_title() {
-    local title="media-autobuild_suite ($bits)"
-    [[ -z $1 ]] || title="$title: $1"
-    printf '\033]0;%s\a' "$title"
+    printf '\033]0;media-autobuild_suite  %s\a' "($bits)${1:+: $1}"
 }
 
 do_exit_prompt() {
-    if [[ -n "$build32$build64" ]]; then # meaning "executing this in the suite's context"
+    if [[ -n $build32$build64 ]]; then # meaning "executing this in the suite's context"
         create_diagnostic
         zip_logs
     fi
     do_prompt "$*"
-    [[ -n "$build32$build64" ]] && exit 1
+    [[ -n $build32$build64 ]] && exit 1
 }
 
 cd_safe() {
@@ -1326,12 +1316,6 @@ do_mesoninstall() {
 
 do_rust() {
     log "rust.update" "$RUSTUP_HOME/bin/cargo.exe" update
-    if [[ $ccache == y ]]; then
-        type sccache > /dev/null 2>&1 &&
-            export RUSTC_WRAPPER=sccache
-    else
-        unset RUSTC_WRAPPER
-    fi
     # use this array to pass additional parameters to cargo
     local rust_extras=()
     extra_script pre rust
