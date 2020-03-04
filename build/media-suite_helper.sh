@@ -1301,7 +1301,7 @@ do_meson() {
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    PKG_CONFIG=pkg-config CC=gcc.bat CXX=g++.bat \
+    PKG_CONFIG=pkg-config CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
         log "meson" meson "$root" --default-library=static --buildtype=release \
         --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}"
     extra_script post meson
@@ -1502,6 +1502,12 @@ do_configure() {
         "${conf_extras[@]}"
     extra_script post configure
     unset conf_extras
+}
+
+do_qmake() {
+    extra_script pre qmake
+    log "qmake" qmake "$@"
+    extra_script post qmake
 }
 
 do_make() {
@@ -2320,6 +2326,8 @@ unset_extra_script() {
 
     # Runs before and after running ninja (do_ninja)
     unset _{pre,post}_ninja
+
+    unset _{pre,post}_qmake
 
     # Runs before and after running make, meson, ninja, and waf (Generic hook for the previous build hooks)
     # If this is present, it will override the other hooks
