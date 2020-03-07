@@ -78,8 +78,7 @@ done
 # shellcheck source=media-suite_helper.sh
 source "$LOCALBUILDDIR"/media-suite_helper.sh
 
-[[ -f "$LOCALBUILDDIR/no_logs" ||  $logging = n ]] &&
-    do_simple_print -p "${orange}Warning: We will not accept any issues lacking any form of logs or logs.zip!${reset}"
+do_simple_print -p "${orange}Warning: We will not accept any issues lacking any form of logs or logs.zip!${reset}"
 
 buildProcess() {
 set_title
@@ -439,7 +438,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]] &&
     [[ ! -f configure || configure.ac -nt configure ]] && log autogen ./buildconf
     [[ $curl = openssl ]] && hide_libressl
     hide_conflicting_libs
-    CPPFLAGS+=" -DNGHTTP2_STATICLIB" \
+    CPPFLAGS+=" -DNGHTTP2_STATICLIB -DPSL_STATIC" \
         do_separate_confmakeinstall global "${extra_opts[@]}" \
         --without-{libssh2,random,ca-bundle,ca-path,librtmp} \
         --with-brotli --enable-sspi --disable-debug
@@ -2416,6 +2415,7 @@ if [[ $vlc == y ]]; then
         # standard and uses single dash args
         log "configure" ./configure "${QT5Base_config[@]}"
 
+        do_make
         do_makeinstall
 
         _add_static_link Qt5Gui plugins/imageformats qjpeg
