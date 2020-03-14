@@ -457,15 +457,31 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]] &&
 fi
 unset _deps
 
+_check=(
+    libglut.a
+    GL/freeglut{,_ucall,_ext,_std}.h
+    GL/glut.h
+    glut.pc
+    lib/cmake/FreeGLUT/FreeGLUT{Targets{,-release},Config{,Version}}.cmake
+)
+if { { [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; } || # Same conditionals as libtiff
+    { [[ $standalone = y ]] && enabled libwebp; }; } &&
+    do_vcs "https://github.com/dcnieho/FreeGLUT.git" freeglut; then
+    do_uninstall "${_check[@]}"
+    do_cmakeinstall ../freeglut/freeglut -D{UNIX,FREEGLUT_BUILD_DEMOS,FREEGLUT_BUILD_SHARED_LIBS}=OFF -DFREEGLUT_REPLACE_GLUT=ON
+    do_checkIfExist
+fi
+
 _check=(libtiff{.a,-4.pc})
 if { { [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; } ||
     { [[ $standalone = y ]] && enabled libwebp; }; } &&
     do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
     do_pacman_install libjpeg-turbo xz zlib zstd
     do_uninstall "${_check[@]}"
+    do_patch "https://gist.githubusercontent.com/1480c1/03d92119a4beaf1fda5eb95effb14419/raw/0001-tiffgt-Link-winmm-if-windows.patch" am
     grep_or_sed 'Requires.private' libtiff-4.pc.in \
         '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd'
-    do_cmakeinstall global -Dwebp=OFF -DUNIX=OFF -Djbig=OFF
+    CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -Dwebp=OFF -DUNIX=OFF -Djbig=OFF
     do_checkIfExist
 fi
 
@@ -531,7 +547,7 @@ if [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; then
 
     _check=(libtesseract.{,l}a tesseract.pc)
     if do_vcs "https://github.com/tesseract-ocr/tesseract.git"; then
-        do_pacman_install docbook-xsl libarchive pango
+        do_pacman_install docbook-xsl libarchive pango asciidoc-py3-git
         do_autogen
         _check+=(bin-global/tesseract.exe)
         do_uninstall include/tesseract "${_check[@]}"
@@ -1054,9 +1070,13 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
         log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo.exe" \
             cinstall --release --prefix "$PWD/install-$bits" --jobs "$cpuCount"
 
-        compiler_builtins=$(ar t "install-$bits/lib/librav1e.a" | grep -xG "compiler_builtins-.*compiler_builtins.*-cgu.0.rcgu.o")
+        compiler_builtins=$(
+            for a in {___chkstk_ms,__udivmoddi4,__divmoddi4,__udivti3}; do
+                nm -CAg --defined-only "install-$bits/lib/librav1e.a" | grep -- "$a" | cut -d: -f2
+            done | sort -u
+        )
         ar x "install-$bits/lib/librav1e.a" "$compiler_builtins"
-        objcopy -W ___chkstk_ms "$compiler_builtins"
+        objcopy --weaken "$compiler_builtins" # Just weaken the whole object, the symbols probably exist in libgcc
         ar r "install-$bits/lib/librav1e.a" "$compiler_builtins"
         rm "$compiler_builtins"
 
@@ -2385,6 +2405,7 @@ if [[ $vlc == y ]]; then
     _check=(bin/qmake.exe Qt5Core.pc Qt5Gui.pc Qt5Widgets.pc)
     if do_vcs "https://github.com/qt/qtbase.git#branch=${_qt_version:=5.14}"; then
         do_uninstall include/QtCore share/mkspecs "${_check[@]}"
+        vcs_clean "$PWD" git
         # Enable ccache on !unix and use cygpath to fix certain issues
         do_patch "http://gist.githubusercontent.com/1480c1/65512f45c343919299697aa778dc50b8/raw/0001-qtbase-mabs.patch" am
         grep_and_sed " create_libtool" mkspecs/features/qt_module.prf \
@@ -2429,6 +2450,7 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc)
     _check=(Qt5Quick.pc Qt5Qml.pc)
     if do_vcs "https://github.com/qt/qtdeclarative.git#branch=$_qt_version"; then
+        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2442,6 +2464,7 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc)
     _check=(Qt5Svg.pc)
     if do_vcs "https://github.com/qt/qtsvg.git#branch=$_qt_version"; then
+        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2453,6 +2476,7 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc Qt5Quick.pc Qt5Qml.pc)
     _check=("$LOCALDESTDIR/qml/QtGraphicalEffects/libqtgraphicaleffectsplugin.a")
     if do_vcs "https://github.com/qt/qtgraphicaleffects.git#branch=$_qt_version"; then
+        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2464,6 +2488,7 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc Qt5Quick.pc Qt5Qml.pc)
     _check=(Qt5QuickControls2.pc)
     if do_vcs "https://github.com/qt/qtquickcontrols2.git#branch=$_qt_version"; then
+        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2534,7 +2559,10 @@ if [[ $vlc == y ]]; then
         do_checkIfExist
     fi
 
-    _check=(bin-video/{cvlc,rvlc,vlc.exe} libexec/vlc/vlc-cache-gen.exe bin-video/libvlc.dll libvlc.pc vlc/libvlc_version.h)
+    _check=("$LOCALDESTDIR"/vlc/bin/{{c,r}vlc,vlc.exe,libvlc.dll}
+            "$LOCALDESTDIR"/vlc/libexec/vlc/vlc-cache-gen.exe
+            "$LOCALDESTDIR"/vlc/lib/pkgconfig/libvlc.pc
+            "$LOCALDESTDIR"/vlc/include/vlc/libvlc_version.h)
     if do_vcs "https://code.videolan.org/videolan/vlc.git"; then
         do_uninstall bin/plugins lib/vlc "${_check[@]}"
         # https://code.videolan.org/videolan/medialibrary/issues/220
@@ -2548,19 +2576,19 @@ if [[ $vlc == y ]]; then
         # Maybe set up vlc_options.txt
 
         # Can't disable shared since vlc will error out. I don't think enabling static will really do anything for us other than breaking builds.
-        do_separate_conf video \
-            --sysconfdir="$LOCALDESTDIR/etc" \
-            --{build,host,target}="${MINGW_CHOST}" \
+        create_build_dir
+        config_path=".." do_configure \
+            --prefix="$LOCALDESTDIR/vlc" \
+            --sysconfdir="$LOCALDESTDIR/vlc/etc" \
+            --{build,host,target}="$MINGW_CHOST" \
             --enable-{shared,avcodec,merge-ffmpeg,qt,nls} \
-            --disable-{static,dbus,fluidsynth,svgdec,aom,mod,ncurses,mpg123,notify,svg,secret,telx,ssp,lua,gst-decode} \
+            --disable-{static,dbus,fluidsynth,svgdec,aom,mod,ncurses,mpg123,notify,svg,secret,telx,ssp,lua,gst-decode,nvdec} \
             --with-binary-version="MABS" BUILDCC="$CC" \
             CFLAGS="$CFLAGS -DGLIB_STATIC_COMPILATION -DQT_STATIC -DGNUTLS_INTERNAL_BUILD -DLIBXML_STATIC -DLIBXML_CATALOG_ENABLED" \
             LIBS="$($PKG_CONFIG --libs libcddb regex iconv) -lwsock32 -lws2_32 -lpthread -liphlpapi"
         do_makeinstall
-        mv -f "$LOCALDESTDIR/bin/libvlc"* "$LOCALDESTDIR/bin-video"
         do_checkIfExist
-
-        "$LOCALDESTDIR/libexec/vlc/vlc-cache-gen" "$LOCALDESTDIR/lib/plugins"
+        PATH="$LOCALDESTDIR/vlc/bin:$PATH" "$LOCALDESTDIR/vlc/libexec/vlc/vlc-cache-gen" "$LOCALDESTDIR/vlc/lib/plugins"
     fi
 fi
 
