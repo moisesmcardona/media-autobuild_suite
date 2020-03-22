@@ -225,7 +225,7 @@ if { enabled libxml2 || [[ $cyanrip = y ]]; } &&
     do_checkIfExist
 fi
 
-if [[ "$mplayer" = "y" ]] || ! mpv_disabled libass ||
+if [[ "$mplayer" = "y" ]] || [[ $mpv = y ]] ||
     { [[ $ffmpeg != "no" ]] && enabled_any libass libfreetype {lib,}fontconfig libfribidi; }; then
     do_pacman_remove freetype fontconfig harfbuzz fribidi
 
@@ -1063,8 +1063,7 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
 
     # C lib
     if enabled librav1e; then
-        type cargo-cinstall.exe >/dev/null 2>&1 ||
-            log "install-cargo-c" "$RUSTUP_HOME/bin/cargo.exe" install cargo-c \
+        log "install-cargo-c" "$RUSTUP_HOME/bin/cargo.exe" install cargo-c \
             --target="$CARCH"-pc-windows-gnu --jobs "$cpuCount"
         [[ -f $CARGO_HOME/config ]] && rm -f "$CARGO_HOME/config"
         log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo.exe" \
