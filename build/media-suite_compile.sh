@@ -145,9 +145,9 @@ set_title "compiling global tools"
 do_simple_print -p '\n\t'"${orange}Starting $bits compilation of global tools${reset}"
 
 if [[ $packing = y ]] &&
-    ! [[ -e /opt/bin/upx.exe && "$(/opt/bin/upx -V | head -1)" = "upx 3.95" ]] &&
-    do_wget -h f94ff30b175d125d1c238458716f5808aee222547a813918b44d0f67035c0054 \
-        "https://github.com/upx/upx/releases/download/v3.95/upx-3.95-win32.zip"; then
+    ! [[ -e /opt/bin/upx.exe && "$(/opt/bin/upx -V | head -1)" = "upx 3.96" ]] &&
+    do_wget -h 014912ea363e2d491587534c1e7efd5bc516520d8f2cdb76bb0aaf915c5db961 \
+        "https://github.com/upx/upx/releases/download/v3.96/upx-3.96-win32.zip"; then
     do_install upx.exe /opt/bin/upx.exe
 fi
 
@@ -1634,9 +1634,9 @@ pc_exists x265 && sed -i 's|-lmingwex||g' "$(file_installed x265.pc)"
 
 _check=(xvid.h libxvidcore.a bin-video/xvid{_encraw.exe,core.dll})
 if enabled libxvid && [[ $standalone = y ]] && ! { files_exist "${_check[@]}" &&
-    grep -q '1.3.5' "$LOCALDESTDIR/bin-video/xvid_encraw.exe"; } &&
-    do_wget -h 165ba6a2a447a8375f7b06db5a3c91810181f2898166e7c8137401d7fc894cf0 \
-        "https://downloads.xvid.com/downloads/xvidcore-1.3.5.tar.gz" "xvidcore.tar.gz"; then
+    grep -q '1.3.7' "$LOCALDESTDIR/bin-video/xvid_encraw.exe"; } &&
+    do_wget -h abbdcbd39555691dd1c9b4d08f0a031376a3b211652c0d8b3b8aa9be1303ce2d \
+        "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz" "xvidcore.tar.gz"; then
     do_pacman_remove xvidcore
     do_uninstall "${_check[@]}"
     cd_safe build/generic
@@ -1673,8 +1673,8 @@ fi
 
 
 if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
-    _python_ver=3.7.5
-    _python_lib=python37
+    _python_ver=3.8.2
+    _python_lib=python38
     [[ $bits = 64bit ]] && _arch=amd64 || _arch=win32
     _check=("lib$_python_lib.a")
     if files_exist "${_check[@]}"; then
@@ -1686,7 +1686,7 @@ if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
         do_checkIfExist
     fi
 
-    _vsver=48
+    _vsver=49
     _check=(lib{vapoursynth,vsscript}.a vapoursynth{,-script}.pc vapoursynth/{VS{Helper,Script},VapourSynth}.h)
     if pc_exists "vapoursynth = $_vsver" && files_exist "${_check[@]}"; then
         do_print_status "vapoursynth R$_vsver" "$green" "Up-to-date"
