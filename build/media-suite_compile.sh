@@ -548,13 +548,18 @@ if [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; then
     _check=(libtesseract.{,l}a tesseract.pc)
     if do_vcs "https://github.com/tesseract-ocr/tesseract.git"; then
         do_pacman_install docbook-xsl libarchive pango asciidoc-py3-git
+        # Don't include curl in tesseract. We aren't mainly using the executable with links.
+        # tesseract doesn't have a --disable-curl option or something so it's dumb.
+        for _curl_pc in {"$MINGW_PREFIX","$LOCALDESTDIR"}"/lib/pkgconfig/libcurl.pc"; do
+            test -f "$_curl_pc" && mv "$_curl_pc"{,.bak}
+        done
         do_autogen
         _check+=(bin-global/tesseract.exe)
         do_uninstall include/tesseract "${_check[@]}"
         sed -i -e 's|Libs.private.*|& -lstdc++|' \
-               -e 's|Requires.private.*|& libarchive libcurl iconv|' tesseract.pc.in
+               -e 's|Requires.private.*|& libarchive iconv|' tesseract.pc.in
         do_separate_confmakeinstall global --disable-{graphics,tessdata-prefix} \
-            LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" CXXFLAGS="$CXXFLAGS -DCURL_STATICLIB" \
+            LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" \
             LIBS="$($PKG_CONFIG --libs iconv lept)" --datadir="$LOCALDESTDIR/bin-global"
         if [[ ! -f $LOCALDESTDIR/bin-global/tessdata/eng.traineddata ]]; then
             do_pacman_install tesseract-data-eng
@@ -566,6 +571,9 @@ if [[ $ffmpeg != "no" || $standalone = y ]] && enabled libtesseract; then
                 "Just download <lang you want>.traineddata and copy it to this directory." \
                 > "$LOCALDESTDIR"/bin-global/tessdata/need_more_languages.txt
         fi
+        for _curl_pc in {"$MINGW_PREFIX","$LOCALDESTDIR"}"/lib/pkgconfig/libcurl.pc"; do
+            test -f "$_curl_pc".bak && mv "$_curl_pc"{.bak,}
+        done
         do_checkIfExist
     fi
     do_addOption --extra-cflags=-fopenmp --extra-libs=-lgomp
@@ -735,7 +743,8 @@ if [[ $standalone = y ]] && enabled libopus; then
     _deps=(opus.pc "$MINGW_PREFIX"/lib/pkgconfig/{libssl,ogg}.pc)
     if do_vcs "https://github.com/xiph/opusfile.git"; then
         do_uninstall "${_check[@]}"
-        do_patch "https://gist.githubusercontent.com/1480c1/c3f32033ad4a07264e2063f0fb38fc1b/raw/0001-Disable-cert-store-integration-if-OPENSSL_VERSION_NU.patch" am
+        do_patch "https://gist.githubusercontent.com/1480c1/beb86dbd8f79e3c1e06d6e9053804f52/raw/0001-Disable-cert-store-integration-if-OPENSSL_VERSION_NU.patch" am
+        do_patch "https://gist.githubusercontent.com/1480c1/beb86dbd8f79e3c1e06d6e9053804f52/raw/0002-configure-Only-add-std-c89-if-not-mingw-because-of-c.patch" am
         do_autogen
         do_separate_confmakeinstall --disable-{examples,doc}
         do_checkIfExist
@@ -1065,12 +1074,12 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
     if enabled librav1e; then
         old_cpath="$CPATH"
         old_libpath="$LIBRARY_PATH"
-        CPATH="`cygpath -m $LOCALDESTDIR/include`;`cygpath -m $MINGW_PREFIX/include`;`cygpath -m $MINGW_PREFIX/$MINGW_CHOST/include`"
-        LIBRARY_PATH="`cygpath -m $LOCALDESTDIR/lib`;`cygpath -m $MINGW_PREFIX/lib`;`cygpath -m $MINGW_PREFIX/$MINGW_CHOST/lib`"
+        CPATH=$(cygpath -m "$LOCALDESTDIR/include" "$MINGW_PREFIX/include" "$MINGW_PREFIX/$MINGW_CHOST/include" | tr '\n' ' ')
+        LIBRARY_PATH=$(cygpath -m "$LOCALDESTDIR/lib" "$MINGW_PREFIX/lib" "$MINGW_PREFIX/$MINGW_CHOST/lib" | tr '\n' ' ')
         export CPATH LIBRARY_PATH
 
         log "install-cargo-c" "$RUSTUP_HOME/bin/cargo.exe" install cargo-c \
-            --target="$CARCH"-pc-windows-gnu --jobs "$cpuCount"
+            --target="$CARCH"-pc-windows-gnu --jobs "$cpuCount" --vers 0.5.3
         [[ -f $CARGO_HOME/config ]] && rm -f "$CARGO_HOME/config"
         log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo.exe" \
             cinstall --release --prefix "$PWD/install-$bits" --jobs "$cpuCount"
@@ -1769,6 +1778,15 @@ if [[ $bits = 64bits && $vvc = y ]] &&
     unset _notrequired
 fi
 
+_check=(avisynth/avisynth{,_c}.h
+        avisynth/avs/{alignment,capi,config,cpuid,minmax,posix,types,win}.h)
+if [[ $ffmpeg != "no" ]] && enabled avisynth &&
+    do_vcs "https://github.com/AviSynth/AviSynthPlus.git"; then
+    do_uninstall "${_check[@]}"
+    do_cmakeinstall -DHEADERS_ONLY=ON
+    do_checkIfExist
+fi
+
 enabled openssl && hide_libressl
 if [[ $ffmpeg != "no" ]]; then
     enabled libgsm && do_pacman_install gsm
@@ -2140,7 +2158,7 @@ if [[ $mpv != "n" ]] && pc_exists libavcodec libavformat libswscale libavfilter;
         # fix python indentation errors from non-existant code review
         grep -ZRlP --include="*.py" '\t' third_party/spirv-tools/ | xargs -r -0 -n1 sed -i 's;\t;    ;g'
 
-        do_cmake -GNinja -DSHADERC_SKIP_TESTS=ON
+        do_cmake -GNinja -DSHADERC_SKIP_TESTS=ON -DSHADERC_ENABLE_WERROR_COMPILE=OFF
         log make ninja
         cmake -E copy_directory ../libshaderc/include/shaderc "$LOCALDESTDIR/include/shaderc"
         cmake -E copy_directory ../libshaderc_util/include/libshaderc_util "$LOCALDESTDIR/include/libshaderc_util"
@@ -2523,6 +2541,7 @@ if [[ $vlc == y ]]; then
     _check=(bin/protoc.exe libprotobuf-lite.{,l}a libprotobuf.{,l}a protobuf{,-lite}.pc)
     if do_vcs "https://github.com/protocolbuffers/protobuf.git"; then
         do_uninstall include/google/protobuf "${_check[@]}"
+        do_patch "https://gist.githubusercontent.com/1480c1/859bf3c0491784e49ed8074d599d37b2/raw/0001-port_def-define-out-stuff-not-needed-on-mingw-w64.patch" am
         do_autogen
         do_separate_confmakeinstall
         do_checkIfExist
@@ -2614,6 +2633,7 @@ fi
 
 _check=(bin-global/redshift.exe)
 if [[ $redshift = y ]] && do_vcs "https://github.com/jonls/redshift.git"; then
+    do_pacman_remove perl
     [[ -f configure ]] || log bootstrap ./bootstrap
     CFLAGS+=' -D_POSIX_C_SOURCE' \
         do_separate_confmakeinstall global --enable-wingdi \
