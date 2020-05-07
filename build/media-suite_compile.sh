@@ -2327,7 +2327,7 @@ if [[ $cyanrip = y ]]; then
     if do_pkgConfig "neon = 0.30.2" &&
         do_vcs "https://github.com/notroj/neon.git"; then
         do_patch "https://gist.githubusercontent.com/1480c1/a99dc2c11036eadc4de9953c55be29e2/raw/0001-Makefile-Fix-doc-issue-in-out-of-source-builds.patch" am
-		do_patch "https://gist.githubusercontent.com/moisespr123/db2e343c7c7dfda3956d87625306da48/raw/0001-remove-nonnulls-on-ne_request.h.patch" am
+        do_patch "https://gist.githubusercontent.com/moisespr123/db2e343c7c7dfda3956d87625306da48/raw/0001-remove-nonnulls-on-ne_request.h.patch" am
         do_uninstall include/neon "${_check[@]}"
         do_autogen
         do_separate_confmakeinstall --disable-{nls,debug,webdav}
