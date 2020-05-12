@@ -405,11 +405,13 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
 fi
 
 _check=(curl/curl.h libcurl.{{,l}a,pc})
-_deps=()
-[[ $curl = libressl ]] && _deps+=(libssl.a)
-[[ $curl = openssl ]] && _deps+=("$MINGW_PREFIX/lib/libssl.a")
-[[ $curl = gnutls ]] && _deps+=(libgnutls.a)
-[[ $curl = mbedtls ]] && _deps+=("$MINGW_PREFIX/lib/libmbedtls.a")
+case $curl in
+libressl) _deps=(libssl.a) ;;
+openssl) _deps=("$MINGW_PREFIX/lib/libssl.a") ;;
+gnutls) _deps=(libgnutls.a) ;;
+mbedtls) _deps=("$MINGW_PREFIX/lib/libmbedtls.a") ;;
+*) _deps=() ;;
+esac
 [[ $standalone = y || $curl != n ]] && _check+=(bin-global/curl.exe)
 if [[ $mediainfo = y || $bmx = y || $curl != n ]] &&
     do_vcs "https://github.com/curl/curl.git#tag=LATEST"; then
@@ -425,15 +427,14 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]] &&
     [[ $standalone = y || $curl != n ]] ||
         sed -ri "s;(^SUBDIRS = lib) src (include) scripts;\1 \2;" Makefile.in
     extra_opts=()
-    if [[ $curl =~ (libre|open)ssl ]]; then
+    case $curl in
+    libressl|openssl)
         extra_opts+=(--with-{ssl,nghttp2} --without-{gnutls,mbedtls})
-    elif [[ $curl =~ mbedtls ]]; then
-        extra_opts+=(--with-{mbedtls,nghttp2} --without-ssl)
-    elif [[ $curl = gnutls ]]; then
-        extra_opts+=(--with-gnutls --without-{ssl,nghttp2,mbedtls})
-    else
-        extra_opts+=(--with-{schannel,winidn,nghttp2} --without-{ssl,gnutls,mbedtls})
-    fi
+        ;;
+    mbedtls) extra_opts+=(--with-{mbedtls,nghttp2} --without-ssl) ;;
+    gnutls) extra_opts+=(--with-gnutls --without-{ssl,nghttp2,mbedtls}) ;;
+    *) extra_opts+=(--with-{schannel,winidn,nghttp2} --without-{ssl,gnutls,mbedtls});;
+    esac
 
     [[ ! -f configure || configure.ac -nt configure ]] &&
         log autogen ./buildconf
@@ -1448,7 +1449,7 @@ if [[ $x264 != no ]]; then
             "--bindir=$LOCALDESTDIR/bin-video")
 
         # light ffmpeg build
-        old_PKG_CONFIG_PATH$PKG_CONFIG_PATH
+        old_PKG_CONFIG_PATH=$PKG_CONFIG_PATH
         PKG_CONFIG_PATH=$LOCALDESTDIR/opt/lightffmpeg/lib/pkgconfig:$MINGW_PREFIX/lib/pkgconfig
         unset_extra_script
         if [[ $standalone = y && $x264 =~ (full|fullv) ]]; then
@@ -1523,13 +1524,11 @@ if [[ $x264 != no ]]; then
             _check+=(libx264.a)
         fi
 
-        if [[ $x264 = high ]]; then
-            extracommands+=("--bit-depth=10")
-        elif [[ $x264 = o8 ]]; then
-            extracommands+=("--bit-depth=8")
-        else
-            extracommands+=("--bit-depth=all")
-        fi
+        case $x264 in
+        high) extracommands+=("--bit-depth=10") ;;
+        o8) extracommands+=("--bit-depth=8") ;;
+        *) extracommands+=("--bit-depth=all") ;;
+        esac
 
         do_uninstall "${_check[@]}"
         check_custom_patches
