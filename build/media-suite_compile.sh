@@ -399,7 +399,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
         do_uninstall "${_check[@]}"
         [[ $standalone == y ]] || sed -ri 's|(bin_PROGRAMS = ).*|\1|g' tools/Makefile.am
         grep_or_sed "Requires.private" libpsl.pc.in "/Libs:/ i\Requires.private: libidn2"
-        do_separate_confmakeinstall global --disable-{nls,rpath,gtk-doc-html,man,runtime}
+        CFLAGS+=" -DPSL_STATIC" do_separate_confmakeinstall global --disable-{nls,rpath,gtk-doc-html,man,runtime}
         do_checkIfExist
     fi
 fi
@@ -1683,9 +1683,9 @@ fi
 
 
 if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
-    _python_ver=3.8.2
+    _python_ver=3.8.3
     _python_lib=python38
-    [[ $bits = 64bit ]] && _arch=amd64 || _arch=win32
+    [[ $bits = 32bit ]] && _arch=win32 || _arch=amd64
     _check=("lib$_python_lib.a")
     if files_exist "${_check[@]}"; then
         do_print_status "python $_python_ver" "$green" "Up-to-date"
@@ -1696,7 +1696,7 @@ if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
         do_checkIfExist
     fi
 
-    _vsver=49
+    _vsver=50
     _check=(lib{vapoursynth,vsscript}.a vapoursynth{,-script}.pc vapoursynth/{VS{Helper,Script},VapourSynth}.h)
     if pc_exists "vapoursynth = $_vsver" && files_exist "${_check[@]}"; then
         do_print_status "vapoursynth R$_vsver" "$green" "Up-to-date"
@@ -1908,7 +1908,7 @@ if [[ $ffmpeg != no ]]; then
         enabled libsvtvp9 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtvp9"
 
         enabled vapoursynth &&
-            do_patch "https://0x0.st/zp4W.txt vapoursynth_alt.patch" am
+            do_patch "https://gist.githubusercontent.com/1480c1/18f251a03b7657241c98cc8baf93a223/raw/0001-Add-Alternative-VapourSynth-demuxer.patch" am
 
         # librav1e
         if enabled librav1e; then
@@ -1917,11 +1917,11 @@ if [[ $ffmpeg != no ]]; then
 
         if [[ ${#FFMPEG_OPTS[@]} -gt 35 ]]; then
             # remove redundant -L and -l flags from extralibs
-            do_patch "https://0x0.st/zLsN.txt" am
+            do_patch "https://gist.githubusercontent.com/1480c1/18f251a03b7657241c98cc8baf93a223/raw/0001-configure-deduplicate-linking-flags.patch" am
         fi
 
         if enabled openal; then
-            do_patch "https://gist.githubusercontent.com/1480c1/7c0f77957bd8ec8a03987dee95651029/raw/openal-pkgconfig.patch" ||
+            do_patch "https://gist.githubusercontent.com/1480c1/18f251a03b7657241c98cc8baf93a223/raw/0001-openal-use-check_pkg_config.patch" ||
                 {
                     do_removeOption "--enable-openal"
                     do_removeOption FFMPEG_OPTS_SHARED "--enable-openal"
