@@ -404,6 +404,11 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
     fi
 fi
 
+# fix retarded google naming schemes for brotli
+pacman -Qs "$MINGW_PACKAGE_PREFIX-brotli" > /dev/null 2>&1 &&
+    grep_or_sed '-static' "$MINGW_PREFIX"/lib/pkgconfig/libbrotlidec.pc 's;-lbrotli.*;&-static;' \
+        "$MINGW_PREFIX"/lib/pkgconfig/libbrotli{enc,dec,common}.pc
+
 _check=(curl/curl.h libcurl.{{,l}a,pc})
 case $curl in
 libressl) _deps=(libssl.a) ;;
@@ -418,9 +423,6 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]] &&
     do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-curl/0003-libpsl-static-libs.patch"
     do_pacman_install nghttp2 brotli
 
-    # fix retarded google naming schemes for brotli
-    grep_or_sed '-static' "$MINGW_PREFIX"/lib/pkgconfig/libbrotlidec.pc 's;-lbrotli.*;&-static;' \
-        "$MINGW_PREFIX"/lib/pkgconfig/libbrotli{enc,dec,common}.pc
     grep_or_sed brotlidec-static configure.ac 's;CHECK_LIB\(brotlidec;&-static;'
 
     do_uninstall include/curl bin-global/curl-config "${_check[@]}"
@@ -1910,11 +1912,6 @@ if [[ $ffmpeg != no ]]; then
         enabled vapoursynth &&
             do_patch "https://gist.githubusercontent.com/1480c1/18f251a03b7657241c98cc8baf93a223/raw/0001-Add-Alternative-VapourSynth-demuxer.patch" am
 
-        # librav1e
-        if enabled librav1e; then
-            do_removeOption FFMPEG_OPTS_SHARED "--enable-librav1e"
-        fi
-
         if [[ ${#FFMPEG_OPTS[@]} -gt 35 ]]; then
             # remove redundant -L and -l flags from extralibs
             do_patch "https://gist.githubusercontent.com/1480c1/18f251a03b7657241c98cc8baf93a223/raw/0001-configure-deduplicate-linking-flags.patch" am
@@ -2157,6 +2154,10 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         add_third_party "https://github.com/KhronosGroup/SPIRV-Tools.git" spirv-tools
         add_third_party "https://github.com/KhronosGroup/SPIRV-Headers.git" spirv-headers
         add_third_party "https://github.com/KhronosGroup/SPIRV-Cross.git" spirv-cross
+        (
+            cd_safe third_party/glslang
+            do_patch "https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master/packages/glslang-0001-fix-gcc-10.1-error.patch" am
+        )
 
         # fix python indentation errors from non-existant code review
         grep -ZRlP --include="*.py" '\t' third_party/spirv-tools/ | xargs -r -0 -n1 sed -i 's;\t;    ;g'
@@ -2183,8 +2184,9 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     _deps=(lib{vulkan,shaderc_combined}.a)
     if ! mpv_disabled libplacebo &&
         do_vcs "https://code.videolan.org/videolan/libplacebo.git"; then
+        do_pacman_install python-mako
         do_uninstall "${_check[@]}"
-        do_mesoninstall
+        do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml"
         do_checkIfExist
     fi
 
