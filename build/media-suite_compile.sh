@@ -828,9 +828,9 @@ if [[ $standalone = y ]] && enabled libmp3lame; then
 fi
 
 _check=(libgme.{a,pc})
-if [[ $ffmpeg != no ]] && enabled libgme && do_pkgConfig "libgme = 0.6.2" &&
-    do_wget -h 5046cb471d422dbe948b5f5dd4e5552aaef52a0899c4b2688e5a68a556af7342 \
-        "https://bitbucket.org/mpyne/game-music-emu/downloads/game-music-emu-0.6.2.tar.xz"; then
+if [[ $ffmpeg != no ]] && enabled libgme && do_pkgConfig "libgme = 0.6.3" &&
+    do_wget -h aba34e53ef0ec6a34b58b84e28bf8cfbccee6585cebca25333604c35db3e051d \
+        "https://bitbucket.org/mpyne/game-music-emu/downloads/game-music-emu-0.6.3.tar.xz"; then
     do_uninstall include/gme "${_check[@]}"
     sed -i 's|__declspec(dllexport)||g' gme/blargg_source.h
     do_cmakeinstall
@@ -1124,9 +1124,9 @@ _check=(libSDL2{,_test,main}.a sdl2.pc SDL2/SDL.h)
 if { { [[ $ffmpeg != no ]] &&
     { enabled sdl2 || ! disabled_any sdl2 autodetect; }; } ||
     mpv_enabled sdl2; } &&
-    do_pkgConfig "sdl2 = 2.0.10" &&
-    do_wget -h b4656c13a1f0d0023ae2f4a9cf08ec92fffb464e0f24238337784159b8b91d57 \
-        "http://www.libsdl.org/release/SDL2-2.0.10.tar.gz"; then
+    do_pkgConfig "sdl2 = 2.0.12" &&
+    do_wget -h 349268f695c02efbc9b9148a70b85e58cefbbf704abd3e91be654db7f1e2c863 \
+        "http://www.libsdl.org/release/SDL2-2.0.12.tar.gz"; then
     do_uninstall include/SDL2 lib/cmake/SDL2 bin/sdl2-config "${_check[@]}"
     sed -i 's|__declspec(dllexport)||g' include/{begin_code,SDL_opengl}.h
     do_separate_confmakeinstall
