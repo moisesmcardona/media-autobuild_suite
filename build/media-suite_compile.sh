@@ -1770,6 +1770,7 @@ if [[ $bits = 64bit && $vvc = y ]] &&
     do_patch "https://0x0.st/zJG_.patch" am
     _notrequired=true
     # install to own dir because the binaries' names are too generic
+	CXXFLAGS+=" -Wno-stringop-overflow"
     do_cmakeinstall -DCMAKE_INSTALL_BINDIR="$LOCALDESTDIR"/bin-video/vvc \
         -DBUILD_STATIC=on -DSET_ENABLE_SPLIT_PARALLELISM=ON -DENABLE_SPLIT_PARALLELISM=OFF \
         -DUSE_CCACHE=OFF
