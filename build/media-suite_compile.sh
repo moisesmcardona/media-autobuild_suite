@@ -832,8 +832,7 @@ if [[ $ffmpeg != no ]] && enabled libgme && do_pkgConfig "libgme = 0.6.3" &&
     do_wget -h aba34e53ef0ec6a34b58b84e28bf8cfbccee6585cebca25333604c35db3e051d \
         "https://bitbucket.org/mpyne/game-music-emu/downloads/game-music-emu-0.6.3.tar.xz"; then
     do_uninstall include/gme "${_check[@]}"
-    sed -i 's|__declspec(dllexport)||g' gme/blargg_source.h
-    do_cmakeinstall
+    do_cmakeinstall -DENABLE_UBSAN=OFF
     do_checkIfExist
 fi
 
@@ -1764,6 +1763,7 @@ _check=(bin-video/vvc/{Encoder,Decoder}App.exe)
 if [[ $bits = 64bit && $vvc = y ]] &&
     do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/VVCSoftware_VTM.git" vvc; then
     do_uninstall bin-video/vvc
+    do_patch "https://gist.githubusercontent.com/1480c1/11fbf8099ea5c9d8d767b63d627c5b43/raw/0001-BBuildEnc.cmake-Remove-Werror-for-gcc-and-clang.patch" am
     # patch for easier install of apps
     # probably not of upstream's interest because of how experimental the codec is
     do_patch "https://gist.githubusercontent.com/1480c1/36ad70c1acbfdfdd2652caf07aa3508f/raw/cmake-allow-installing-apps.patch" am
@@ -2049,8 +2049,25 @@ fi
 if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; then
     if ! mpv_disabled lua && opt_exists MPV_OPTS "--lua=5.1"; then
         do_pacman_install lua51
-    elif ! mpv_disabled lua; then
-        do_pacman_install luajit
+    elif ! mpv_disabled lua &&
+        _check=(bin-global/luajit.exe libluajit-5.1.a luajit.pc luajit-2.1/lua.h) &&
+        do_vcs "https://github.com/LuaJIT/LuaJIT.git" luajit; then
+        do_pacman_remove luajit lua51
+        do_uninstall include/luajit-2.1 lib/lua "${_check[@]}"
+        [[ -f src/luajit.exe ]] && log "clean" make clean
+        do_patch "https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master/packages/luajit-0001-add-win32-utf-8-filesystem-functions.patch" am
+        do_patch "https://gist.githubusercontent.com/1480c1/71bbcf94bb0994647c622c4b710ac3cf/raw/0001-win32-UTF-8-Remove-va-arg-and-.-and-unused-functions.patch" am
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-luajit/002-fix-pkg-config-file.patch"
+        sed -i "s|export PREFIX= /usr/local|export PREFIX=${LOCALDESTDIR}|g" Makefile
+        sed -i "s|^prefix=.*|prefix=$LOCALDESTDIR|" etc/luajit.pc
+        _luajit_args=("PREFIX=$LOCALDESTDIR" "INSTALL_BIN=$LOCALDESTDIR/bin-global" "INSTALL_TNAME=luajit.exe")
+        do_make amalg HOST_CC="$CC" BUILDMODE=static \
+            CFLAGS='-D_WIN32_WINNT=0x0602 -DUNICODE' \
+            XCFLAGS="-DLUAJIT_ENABLE_LUA52COMPAT$([[ $bits = 64bit ]] && echo " -DLUAJIT_ENABLE_GC64")" \
+            "${_luajit_args[@]}"
+        do_makeinstall "${_luajit_args[@]}"
+        do_checkIfExist
+        unset _luajit_args
     fi
 
     do_pacman_remove uchardet-git
