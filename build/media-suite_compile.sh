@@ -1055,6 +1055,24 @@ if { [[ $dav1d = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
     do_checkIfExist
 fi
 
+_check=(/opt/cargo/bin/cargo-c{build,install}.exe)
+if enabled librav1e &&
+    [[ ! -x /opt/cargo/bin/cargo-cbuild || $(/opt/cargo/bin/cargo-cbuild --version) =~ 0.6* ]] &&
+    do_vcs "https://github.com/lu-zero/cargo-c.git"; then
+    # Delete any old cargo-cbuilds
+    [[ -x /opt/cargo/bin/cargo-cbuild ]] && log uninstall.cargo-c cargo uninstall -q cargo-c
+    if [[ -d ssh2-rs-git ]]; then
+        log submodule.pull git -C ssh2-rs-git pull --recurse-submodules --autostash --rebase=true -j"$cpuCount"
+    else
+        # Temp fork until main repo updates their libssh2
+        log ssh2-clone git clone --recurse-submodules -j"$cpuCount" "https://github.com/1480c1/ssh2-rs.git" ssh2-rs-git
+    fi
+    # Replace libssh2-sys with a more up to date one since libssh2 had an issue that was not merged in the main libssh2-sys crate
+    printf '%s\n' "" "[patch.crates-io]" 'libssh2-sys = { path = "ssh2-rs-git/libssh2-sys" }' >> Cargo.toml
+    do_rustinstall
+    do_checkIfExist
+fi
+
 _check=()
 { [[ $rav1e = y ]] ||
     enabled librav1e && [[ $standalone = y ]]; } &&
@@ -1062,7 +1080,6 @@ _check=()
 enabled librav1e && _check+=(librav1e.a rav1e.pc rav1e/rav1e.h)
 if { [[ $rav1e = y ]] || enabled librav1e; } &&
     do_vcs "https://github.com/xiph/rav1e.git"; then
-    log submodule git submodule update --init
     do_uninstall "${_check[@]}" include/rav1e
 
     # standalone binary
@@ -1079,21 +1096,22 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
         LIBRARY_PATH=$(cygpath -m "$LOCALDESTDIR/lib" "$MINGW_PREFIX/lib" "$MINGW_PREFIX/$MINGW_CHOST/lib" | tr '\n' ' ')
         export CPATH LIBRARY_PATH
 
-        log "install-cargo-c" "$RUSTUP_HOME/bin/cargo.exe" install cargo-c \
-            --target="$CARCH"-pc-windows-gnu --jobs "$cpuCount" --vers 0.5.3
         rm -f "$CARGO_HOME/config" 2> /dev/null
         log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo.exe" \
             cinstall --release --prefix "$PWD/install-$bits" --jobs "$cpuCount"
 
-        compiler_builtins=$(
+        mapfile -t compiler_builtins < <(
             for a in ___chkstk_ms __udivmoddi4 __divmoddi4 __udivti3; do
                 nm -CAg --defined-only "install-$bits/lib/librav1e.a" | grep -- "$a" | cut -d: -f2
             done | sort -u
         )
-        ar x "install-$bits/lib/librav1e.a" "$compiler_builtins"
-        objcopy --weaken "$compiler_builtins" # Just weaken the whole object, the symbols probably exist in libgcc
-        ar r "install-$bits/lib/librav1e.a" "$compiler_builtins"
-        rm "$compiler_builtins"
+        ar x "install-$bits/lib/librav1e.a" "${compiler_builtins[@]}"
+        # Just weaken the whole object, the symbols probably exist in libgcc
+        for compiler_builtin in "${compiler_builtins[@]}"; do
+            objcopy --weaken "$compiler_builtin"
+        done
+        ar r "install-$bits/lib/librav1e.a" "${compiler_builtins[@]}"
+        rm "${compiler_builtins[@]}"
 
         # do_install "install-$bits/bin/rav1e.dll" bin-video/
         # do_install "install-$bits/lib/librav1e.dll.a" lib/
@@ -1787,6 +1805,42 @@ if [[ $ffmpeg != no ]] && enabled avisynth &&
     do_checkIfExist
 fi
 
+_check=(libvulkan.a vulkan.pc vulkan/vulkan.h d3d{kmthk,ukmdt}.h)
+if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
+    do_vcs "https://github.com/KhronosGroup/Vulkan-Loader.git" vulkan-loader; then
+    _DeadSix27=https://raw.githubusercontent.com/DeadSix27/python_cross_compile_script/master
+    _shinchiro=https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master
+    do_uninstall "${_check[@]}"
+    do_patch "$_shinchiro/packages/vulkan-0001-cross-compile-static-linking-hacks.patch" am
+    create_build_dir
+    log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
+    cd_safe Vulkan-Headers
+        do_print_progress "Installing Vulkan-Headers"
+        do_uninstall include/vulkan
+        do_cmakeinstall
+        do_wget -c -r -q "$_DeadSix27/additional_headers/d3dkmthk.h"
+        do_wget -c -r -q "$_DeadSix27/additional_headers/d3dukmdt.h"
+        do_install d3d{kmthk,ukmdt}.h include/
+    cd_safe "$(get_first_subdir -f)"
+    do_print_progress "Building Vulkan-Loader"
+    do_cmakeinstall -DBUILD_TESTS=OFF -DCMAKE_SYSTEM_NAME=Windows -DUSE_CCACHE=OFF \
+    -DCMAKE_ASM_COMPILER="$(command -v nasm.exe)" -DVULKAN_HEADERS_INSTALL_DIR="$LOCALDESTDIR" \
+    -DENABLE_STATIC_LOADER=ON -DUNIX=OFF
+    do_checkIfExist
+    unset _DeadSix27 _shinchiro
+fi
+
+_check=(lib{glslang,OSDependent,HLSL,OGLCompiler,SPVRemapper}.a
+        libSPIRV{,-Tools{,-opt,-link,-reduce}}.a)
+if [[ $ffmpeg != no ]] && enabled libglslang &&
+    do_vcs "https://github.com/KhronosGroup/glslang.git"; then
+    do_uninstall "${_check[@]}"
+    log dependencies /usr/bin/python ./update_glslang_sources.py
+    do_patch "https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master/packages/glslang-0001-fix-gcc-10.1-error.patch" am
+    do_cmakeinstall -DUNIX=OFF
+    do_checkIfExist
+fi
+
 enabled openssl && hide_libressl
 if [[ $ffmpeg != no ]]; then
     enabled libgsm && do_pacman_install gsm
@@ -1869,22 +1923,25 @@ if [[ $ffmpeg != no ]]; then
         _deps=(lib{aom,tesseract,vmaf,x265,vpx}.a)
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
 
-        # See issue https://github.com/OpenVisualCloud/SVT-AV1/issues/567 for the reasons behind the follow codeblock:
-        # start of SVT-AV1 temporary measures
-        if enabled libsvtav1; then
-            if enabled libaom && enabled libopencore-amrwb; then
-                do_print_progress "Until SVT-AV1 issues a fix, libaom & libopencore-amrwb must be disabled while libsvtav1 is enabled."
-                do_removeOption --enable-libaom
-                do_removeOption --enable-libopencore-amrwb
-            elif enabled libaom; then
-                do_print_progress "Until SVT-AV1 issues a fix, libaom must be disabled while libsvtav1 is enabled."
-                do_removeOption --enable-libaom
-            elif enabled libopencore-amrwb; then
-                do_print_progress "Until SVT-AV1 issues a fix, libopencore-amrwb must be disabled while libsvtav1 is enabled."
-                do_removeOption --enable-libopencore-amrwb
-            fi
+        # ((TEMPORARY SVT-VP9 MEASURES))
+        # Reasons for this codeblock = https://github.com/m-ab-s/media-autobuild_suite/pull/1619#issuecomment-616206347
+        if enabled libsvtvp9; then
+            enabled libxvid && do_removeOption --enable-libxvid &&
+                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libxvid."
+            enabled libsvtav1 && do_removeOption --enable-libsvtav1 &&
+                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libsvtav1."
         fi
-        # end of SVT-AV1 temporary measures
+        # (/(TEMPORARY SVT-VP9 MEASURES))
+
+        # ((TEMPORARY SVT-AV1 MEASURES))
+        # Reasons for this codeblock = https://github.com/OpenVisualCloud/SVT-AV1/issues/567
+        if enabled libsvtav1; then
+            enabled libaom && do_removeOption --enable-libaom &&
+                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libaom."
+            enabled libopencore-amrwb && do_removeOption --enable-libopencore-amrwb &&
+                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libopencore-amrwb."
+        fi
+        # (/(TEMPORARY SVT-AV1 MEASURES))
 
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
@@ -2118,31 +2175,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         do_install build/host/lib/*.a lib/
         cmake -E copy_directory include "$LOCALDESTDIR/include"
         do_checkIfExist
-    fi
-
-    _check=(libvulkan.a vulkan.pc vulkan/vulkan.h d3d{kmthk,ukmdt}.h)
-    if ! mpv_disabled vulkan &&
-        do_vcs "https://github.com/KhronosGroup/Vulkan-Loader.git" vulkan-loader; then
-        _DeadSix27=https://raw.githubusercontent.com/DeadSix27/python_cross_compile_script/master
-        _shinchiro=https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master
-        do_uninstall "${_check[@]}"
-        do_patch "$_shinchiro/packages/vulkan-0001-cross-compile-static-linking-hacks.patch" am
-        create_build_dir
-        log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
-        cd_safe Vulkan-Headers
-            do_print_progress "Installing Vulkan-Headers"
-            do_uninstall include/vulkan
-            do_cmakeinstall
-            do_wget -c -r -q "$_DeadSix27/additional_headers/d3dkmthk.h"
-            do_wget -c -r -q "$_DeadSix27/additional_headers/d3dukmdt.h"
-            do_install d3d{kmthk,ukmdt}.h include/
-        cd_safe "$(get_first_subdir -f)"
-        do_print_progress "Building Vulkan-Loader"
-        do_cmakeinstall -DBUILD_TESTS=no -DCMAKE_SYSTEM_NAME=Windows -DUSE_CCACHE=OFF \
-        -DCMAKE_ASM_COMPILER="$(command -v nasm.exe)" -DVULKAN_HEADERS_INSTALL_DIR="$LOCALDESTDIR" \
-        -DENABLE_STATIC_LOADER=ON -DUNIX=off
-        do_checkIfExist
-        unset _DeadSix27
     fi
 
     _check=(shaderc/shaderc.h libshaderc_combined.a)
@@ -2562,7 +2594,6 @@ if [[ $vlc == y ]]; then
     _check=(bin/protoc.exe libprotobuf-lite.{,l}a libprotobuf.{,l}a protobuf{,-lite}.pc)
     if do_vcs "https://github.com/protocolbuffers/protobuf.git"; then
         do_uninstall include/google/protobuf "${_check[@]}"
-        do_patch "https://gist.githubusercontent.com/1480c1/859bf3c0491784e49ed8074d599d37b2/raw/0001-port_def-define-out-stuff-not-needed-on-mingw-w64.patch" am
         do_autogen
         do_separate_confmakeinstall
         do_checkIfExist
