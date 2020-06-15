@@ -696,9 +696,9 @@ if [[ $standalone = y && $faac = y ]] && ! files_exist "${_check[@]}" &&
         "https://github.com/knik0/faac/archive/1_30.tar.gz" "faac-1_30.tar.gz"; then
     do_uninstall libfaac.a faac{,cfg}.h "${_check[@]}"
     # autoconf: frontend compilation optional
-    # blockswitch: add missing stdint include
     # frontend: fix out-of-root build
-    do_patch https://0x0.st/zMuQ.txt
+    do_patch "https://github.com/1480c1/faac/commit/6f4a16677546c01e93712dcc0f43e1cff8ab76e6.patch" am
+    do_patch "https://github.com/knik0/faac/commit/c8d12a5c7c5b6f1c4593f0a6c1eeceacc4d7c941.patch" am
     log bootstrap ./bootstrap
     extracommands=()
     [[ $standalone = n ]] && extracommands+=(--disable-frontend)
@@ -942,10 +942,11 @@ if { { [[ $ffmpeg != no ]] &&
     enabled openal; } || mpv_enabled openal; } &&
     do_vcs "https://github.com/kcat/openal-soft.git"; then
     do_uninstall "${_check[@]}"
-    _mingw_patches=https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-openal
-    do_patch "$_mingw_patches/0003-openal-not-32.mingw.patch"
-    do_patch "$_mingw_patches/0004-disable-OSS-windows.patch"
-    do_patch "https://gist.githubusercontent.com/1480c1/3857c205b7f63de3b21135307b2f2d4f/raw/0003-Fix-winmm-inclusion-in-pkgconfig.patch"
+    #_mingw_patches=https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-openal
+    #do_patch "$_mingw_patches/0003-openal-not-32.mingw.patch"
+    #do_patch "$_mingw_patches/0004-disable-OSS-windows.patch"
+    #do_patch "https://gist.githubusercontent.com/1480c1/3857c205b7f63de3b21135307b2f2d4f/raw/0003-Fix-winmm-inclusion-in-pkgconfig.patch"
+    do_patch "https://github.com/m-ab-s/media-autobuild_suite/files/4777022/patch_openal.diff.txt"
     do_cmakeinstall -DLIBTYPE=STATIC -DALSOFT_UTILS=OFF -DALSOFT_EXAMPLES=OFF
     sed -i 's/Libs.private.*/& -lole32 -lstdc++/' "$LOCALDESTDIR/lib/pkgconfig/openal.pc"
     do_checkIfExist
@@ -2114,8 +2115,8 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         do_pacman_remove luajit lua51
         do_uninstall include/luajit-2.1 lib/lua "${_check[@]}"
         [[ -f src/luajit.exe ]] && log "clean" make clean
-        do_patch "https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master/packages/luajit-0001-add-win32-utf-8-filesystem-functions.patch" am
-        do_patch "https://gist.githubusercontent.com/1480c1/71bbcf94bb0994647c622c4b710ac3cf/raw/0001-win32-UTF-8-Remove-va-arg-and-.-and-unused-functions.patch" am
+        do_patch "https://gist.githubusercontent.com/1480c1/71bbcf94bb0994647c622c4b710ac3cf/raw/0001-Add-win32-UTF-8-filesystem-functions.patch" am
+        do_patch "https://gist.githubusercontent.com/1480c1/71bbcf94bb0994647c622c4b710ac3cf/raw/0002-win32-UTF-8-Remove-va-arg-and-.-and-unused-functions.patch" am
         do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-luajit/002-fix-pkg-config-file.patch"
         sed -i "s|export PREFIX= /usr/local|export PREFIX=${LOCALDESTDIR}|g" Makefile
         sed -i "s|^prefix=.*|prefix=$LOCALDESTDIR|" etc/luajit.pc
@@ -2262,7 +2263,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         enabled libtesseract && mpv_cflags+=("-fopenmp") mpv_ldflags+=("-lgomp")
         enabled libssh && mpv_ldflags+=("-Wl,--allow-multiple-definition")
         if ! mpv_disabled manpage-build || mpv_enabled html-build; then
-            do_pacman_remove python3-docutils
             do_pacman_install python-docutils
         fi
         # do_pacman_remove python3-rst2pdf
