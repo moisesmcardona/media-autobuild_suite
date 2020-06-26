@@ -110,16 +110,16 @@ unset _keys _root
 
 _clean_old_builds=(j{config,error,morecfg,peglib}.h
     lib{jpeg,nettle,ogg,vorbis{,enc,file},gnurx,regex}.{,l}a
-    lib{opencore-amr{nb,wb},twolame,theora{,enc,dec},caca,magic,luajit-5.1,uchardet}.{l,}a
-    libSDL{,main}.{l,}a libopen{jpwl,mj2,jp2}.{a,pc} lib/lua
+    lib{opencore-amr{nb,wb},twolame,theora{,enc,dec},caca,magic,uchardet}.{l,}a
+    libSDL{,main}.{l,}a libopen{jpwl,mj2,jp2}.{a,pc}
     include/{nettle,ogg,opencore-amr{nb,wb},theora,cdio,SDL,openjpeg-2.{1,2},luajit-2.0,uchardet,wels}
     regex.h magic.h
-    {nettle,ogg,vorbis{,enc,file},vo-aacenc,sdl,luajit,uchardet}.pc
+    {nettle,ogg,vorbis{,enc,file},vo-aacenc,sdl,uchardet}.pc
     {opencore-amr{nb,wb},twolame,theora{,enc,dec},caca,dcadec,libEGL,openh264}.pc
     libcdio_{cdda,paranoia}.{{l,}a,pc}
     share/aclocal/{ogg,vorbis}.m4
     twolame.h bin-audio/{twolame,cd-paranoia}.exe
-    bin-global/{{file,uchardet}.exe,sdl-config,luajit{,-2.0.4.exe}}
+    bin-global/{{file,uchardet}.exe,sdl-config,luajit-2.0.4.exe}
     libebur128.a ebur128.h
     libopenh264.a
     liburiparser.{{,l}a,pc}
@@ -258,6 +258,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
         done
         unset _s
         do_autogen --noconf
+        do_autoreconf
         extracommands=(--disable-docs --enable-iconv
             "--with-libiconv-prefix=$MINGW_PREFIX"
             "--with-libiconv-lib=$MINGW_PREFIX/lib" "--with-libiconv-includes=$MINGW_PREFIX/include"
@@ -387,6 +388,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
         # unistring also depends on iconv
         grep_or_sed '@LTLIBUNISTRING@ @LTLIBICONV@' libidn2.pc.in \
             's|(@LTLIBICONV@) (@LTLIBUNISTRING@)|\2 \1|'
+        do_autoreconf
         do_separate_confmakeinstall global --disable-{doc,rpath,nls}
         do_checkIfExist
     fi
@@ -399,6 +401,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
         do_uninstall "${_check[@]}"
         [[ $standalone == y ]] || sed -ri 's|(bin_PROGRAMS = ).*|\1|g' tools/Makefile.am
         grep_or_sed "Requires.private" libpsl.pc.in "/Libs:/ i\Requires.private: libidn2"
+        do_autoreconf
         CFLAGS+=" -DPSL_STATIC" do_separate_confmakeinstall global --disable-{nls,rpath,gtk-doc-html,man,runtime}
         do_checkIfExist
     fi
@@ -691,14 +694,12 @@ fi
 
 [[ $faac = y ]] && do_pacman_install faac
 _check=(bin-audio/faac{,gui}.exe)
-if [[ $standalone = y && $faac = y ]] && ! files_exist "${_check[@]}" &&
-    do_wget -h adc387ce588cca16d98c03b6ec1e58f0ffd9fc6eadb00e254157d6b16203b2d2 \
-        "https://github.com/knik0/faac/archive/1_30.tar.gz" "faac-1_30.tar.gz"; then
+if [[ $standalone = y && $faac = y ]] &&
+    do_vcs "https://github.com/knik0/faac.git"; then
     do_uninstall libfaac.a faac{,cfg}.h "${_check[@]}"
     # autoconf: frontend compilation optional
     # frontend: fix out-of-root build
-    do_patch "https://github.com/1480c1/faac/commit/6f4a16677546c01e93712dcc0f43e1cff8ab76e6.patch" am
-    do_patch "https://github.com/knik0/faac/commit/c8d12a5c7c5b6f1c4593f0a6c1eeceacc4d7c941.patch" am
+    do_patch "https://github.com/1480c1/faac/commit/897af7717c514b04a86889b27a2f3922decccbac.patch" am
     log bootstrap ./bootstrap
     extracommands=()
     [[ $standalone = n ]] && extracommands+=(--disable-frontend)
@@ -1058,9 +1059,9 @@ if { [[ $dav1d = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
     do_checkIfExist
 fi
 
-_check=(/opt/cargo/bin/cargo-c{build,install}.exe)
+_check=(/opt/cargo/bin/cargo-c{build,inst}.exe)
 if enabled librav1e &&
-    [[ ! -x /opt/cargo/bin/cargo-cbuild || $(/opt/cargo/bin/cargo-cbuild --version) =~ 0.6* ]] &&
+    [[ ! -x /opt/cargo/bin/cargo-cinst || $(/opt/cargo/bin/cargo-cbuild --version) != 0.6* ]] &&
     do_vcs "https://github.com/lu-zero/cargo-c.git"; then
     # Delete any old cargo-cbuilds
     [[ -x /opt/cargo/bin/cargo-cbuild ]] && log uninstall.cargo-c cargo uninstall -q cargo-c
@@ -1072,6 +1073,8 @@ if enabled librav1e &&
     fi
     # Replace libssh2-sys with a more up to date one since libssh2 had an issue that was not merged in the main libssh2-sys crate
     printf '%s\n' "" "[patch.crates-io]" 'libssh2-sys = { path = "ssh2-rs-git/libssh2-sys" }' >> Cargo.toml
+    grep_and_sed cargo-cinstall Cargo.toml 's/cargo-cinstall/cargo-cinst/g'
+    grep_and_sed cinstall src/cinstall.rs 's/cinstall/cinst/g'
     do_rustinstall
     do_checkIfExist
 fi
@@ -1100,8 +1103,8 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
         export CPATH LIBRARY_PATH
 
         rm -f "$CARGO_HOME/config" 2> /dev/null
-        log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo.exe" \
-            cinstall --release --prefix "$PWD/install-$bits" --jobs "$cpuCount"
+        log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo-cinst.exe" \
+            cinst --release --prefix "$PWD/install-$bits" --jobs "$cpuCount"
 
         mapfile -t compiler_builtins < <(
             for a in ___chkstk_ms __udivmoddi4 __divmoddi4 __udivti3; do
@@ -1115,6 +1118,12 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
         done
         ar r "install-$bits/lib/librav1e.a" "${compiler_builtins[@]}"
         rm "${compiler_builtins[@]}"
+
+        (
+            _rav1e_install_win_path=$(cygpath -m "$PWD/install-$bits")
+            _rav1e_dest_win_path=$(cygpath -m "$LOCALDESTDIR")
+            grep_and_sed "$_rav1e_install_win_path" "install-$bits/lib/pkgconfig/rav1e.pc" "s#$_rav1e_install_win_path#$_rav1e_dest_win_path#"
+        )
 
         # do_install "install-$bits/bin/rav1e.dll" bin-video/
         # do_install "install-$bits/lib/librav1e.dll.a" lib/
@@ -1834,7 +1843,7 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
 fi
 
 _check=(lib{glslang,OSDependent,HLSL,OGLCompiler,SPVRemapper}.a
-        libSPIRV{,-Tools{,-opt,-link,-reduce}}.a)
+        libSPIRV{,-Tools{,-opt,-link,-reduce}}.a glslang/SPIRV/GlslangToSpv.h)
 if [[ $ffmpeg != no ]] && enabled libglslang &&
     do_vcs "https://github.com/KhronosGroup/glslang.git"; then
     do_uninstall "${_check[@]}"
@@ -1930,9 +1939,9 @@ if [[ $ffmpeg != no ]]; then
         # Reasons for this codeblock = https://github.com/m-ab-s/media-autobuild_suite/pull/1619#issuecomment-616206347
         if enabled libsvtvp9; then
             enabled libxvid && do_removeOption --enable-libxvid &&
-                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libxvid."
+                do_print_progress "Until an upstream fix is issued, libxvid must be disabled when compiling with libsvtvp9."
             enabled libsvtav1 && do_removeOption --enable-libsvtav1 &&
-                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libsvtav1."
+                do_print_progress "Until an upstream fix is issued, libsvtav1 must be disabled when compiling with libsvtvp9."
         fi
         # (/(TEMPORARY SVT-VP9 MEASURES))
 
@@ -1940,9 +1949,9 @@ if [[ $ffmpeg != no ]]; then
         # Reasons for this codeblock = https://github.com/OpenVisualCloud/SVT-AV1/issues/567
         if enabled libsvtav1; then
             enabled libaom && do_removeOption --enable-libaom &&
-                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libaom."
+                do_print_progress "Until an upstream fix is issued, libaom must be disabled when compiling with libsvtav1."
             enabled libopencore-amrwb && do_removeOption --enable-libopencore-amrwb &&
-                do_print_progress "Until an upstream fix is issued, compiling with libsvtvp9 must disable libopencore-amrwb."
+                do_print_progress "Until an upstream fix is issued, libopencore-amrwb must be disabled when compiling with libsvtav1."
         fi
         # (/(TEMPORARY SVT-AV1 MEASURES))
 
@@ -2140,7 +2149,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     if mpv_enabled egl-angle && do_vcs "https://chromium.googlesource.com/angle/angle"; then
         do_simple_print "${orange}mpv will need libGLESv2.dll and libEGL.dll to use gpu-context=angle"'!'
         do_simple_print "You can find these in your browser's installation directory, usually."
-        do_uninstall include/{EGL,GLES{2,3},GLSLANG,KHR,platform} angle_gl.h \
+        do_uninstall include/{EGL,GLES{2,3},KHR,platform} angle_gl.h \
             lib{GLESv2,EGL}.a "${_check[@]}"
         cp -rf include/{EGL,KHR} "$LOCALDESTDIR/include/"
         do_checkIfExist
