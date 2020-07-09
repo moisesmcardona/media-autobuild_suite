@@ -210,7 +210,7 @@ _check=(bin-global/dssim.exe)
 if [[ $dssim = y ]] &&
     do_vcs "https://github.com/kornelski/dssim.git"; then
     do_uninstall "${_check[@]}"
-    do_rust
+    CFLAGS+=" -fno-PIC" do_rust
     do_install "target/$CARCH-pc-windows-gnu/release/dssim.exe" bin-global/
     do_checkIfExist
 fi
@@ -275,7 +275,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
 
     _deps=(libfreetype.a)
     _check=(libharfbuzz.{,l}a harfbuzz.pc)
-    if [[ $ffmpeg != sharedlibs ]] && do_vcs "https://github.com/behdad/harfbuzz.git#tag=LATEST"; then
+    if [[ $ffmpeg != sharedlibs ]] && do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
         do_pacman_install ragel
         NOCONFIGURE=y do_autogen
         do_uninstall include/harfbuzz "${_check[@]}"
@@ -288,18 +288,18 @@ if [[ $mplayer = y || $mpv = y ]] ||
     [[ $standalone = y ]] && _check+=(bin-video/fribidi.exe)
     [[ $ffmpeg = sharedlibs ]] && _check+=(bin-video/libfribidi-0.dll libfribidi.dll.a)
     if do_vcs "https://github.com/fribidi/fribidi.git#tag=LATEST"; then
-        extracommands=("--bindir=bin-video" "-Ddocs=false" "-Dglib=false")
-        [[ $standalone = n ]] && sed -i "/subdir('bin')/d" meson.build
-        sed -i "/subdir('test')/d" meson.build
+        do_patch "https://github.com/fribidi/fribidi/pull/151.patch" am
+        extracommands=("-Ddocs=false" "-Dtests=false")
+        [[ $standalone = n ]] && extracommands+=("-Dbin=false")
         if [[ $ffmpeg = sharedlibs ]]; then
             create_build_dir shared
-            log meson meson .. --default-library=shared \
-                --prefix="$LOCALDESTDIR" "${extracommands[@]}"
+            log meson meson .. --default-library=shared --bindir=bin-video \
+                --prefix="$LOCALDESTDIR" -Dbin=false "${extracommands[@]}"
             do_ninja
             do_ninjainstall
             cd_safe ..
         fi
-        do_mesoninstall "${extracommands[@]}"
+        do_mesoninstall video "${extracommands[@]}"
         do_checkIfExist
     fi
 
