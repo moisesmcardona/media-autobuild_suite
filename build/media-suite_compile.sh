@@ -1776,11 +1776,11 @@ _check=(bin-video/vvc/{Encoder,Decoder}App.exe)
 if [[ $bits = 64bit && $vvc = y ]] &&
     do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/VVCSoftware_VTM.git" vvc; then
     do_uninstall bin-video/vvc
-    do_patch "https://gist.githubusercontent.com/1480c1/11fbf8099ea5c9d8d767b63d627c5b43/raw/0001-BBuildEnc.cmake-Remove-Werror-for-gcc-and-clang.patch" am
+    do_patch "https://gist.githubusercontent.com/1480c1/36ad70c1acbfdfdd2652caf07aa3508f/raw/0001-BBuildEnc.cmake-Remove-Werror-for-gcc-and-clang.patch" am
     # patch for easier install of apps
     # probably not of upstream's interest because of how experimental the codec is
     do_patch "https://gist.githubusercontent.com/1480c1/36ad70c1acbfdfdd2652caf07aa3508f/raw/cmake-allow-installing-apps.patch" am
-    do_patch "https://0x0.st/zJG_.patch" am
+    do_patch "https://gist.githubusercontent.com/1480c1/36ad70c1acbfdfdd2652caf07aa3508f/raw/0001-CMake-add-USE_CCACHE-variable-to-disable-using-found.patch" am
     _notrequired=true
     # install to own dir because the binaries' names are too generic
 	CXXFLAGS+=" -Wno-stringop-overflow"
@@ -1919,6 +1919,8 @@ if [[ $ffmpeg != no ]]; then
 
         grep -q SRTO_STRICTENC libavformat/libsrt.c &&
             do_patch "https://patchwork.ffmpeg.org/project/ffmpeg/patch/1594533783-28695-1-git-send-email-mypopydev@gmail.com/mbox/" am
+
+        do_patch "https://gist.githubusercontent.com/1480c1/18f251a03b7657241c98cc8baf93a223/raw/0001-glslang-add-MachineIndependent.patch" am
 
         # ((TEMPORARY SVT-VP9 MEASURES))
         # Reasons for this codeblock = https://github.com/m-ab-s/media-autobuild_suite/pull/1619#issuecomment-616206347
