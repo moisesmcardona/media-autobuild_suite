@@ -1393,8 +1393,6 @@ fi
 _check=(libgpac_static.a bin-video/MP4Box.exe)
 if [[ $mp4box = y ]] && do_vcs "https://github.com/gpac/gpac.git"; then
     do_uninstall include/gpac "${_check[@]}"
-    do_patch "https://github.com/gpac/gpac/pull/1545.patch" am
-    do_patch "https://github.com/gpac/gpac/pull/1546.patch" am
     git grep -PIl "\xC2\xA0" | xargs -r sed -i 's/\xC2\xA0/ /g'
     LDFLAGS+=" -L$LOCALDESTDIR/lib -L$MINGW_PREFIX/lib" \
         do_separate_conf --static-mp4box
@@ -2355,8 +2353,6 @@ if [[ $cyanrip = y ]]; then
 
     _check=(neon/ne_utils.h libneon.a neon.pc)
     if do_vcs "https://github.com/notroj/neon.git"; then
-        do_patch "https://gist.githubusercontent.com/1480c1/a99dc2c11036eadc4de9953c55be29e2/raw/0001-Makefile-Fix-doc-issue-in-out-of-source-builds.patch" am
-        do_patch "https://gist.githubusercontent.com/moisespr123/db2e343c7c7dfda3956d87625306da48/raw/0001-remove-nonnulls-on-ne_request.h.patch" am
         do_uninstall include/neon "${_check[@]}"
         do_autogen
         do_separate_confmakeinstall --disable-{nls,debug,webdav}
