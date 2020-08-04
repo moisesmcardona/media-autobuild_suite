@@ -1966,6 +1966,7 @@ else
     run_pkgcfg $static $base_args $libs_args "$@"
 fi
 EOF
+    mkdir -p "$LOCALDESTDIR"/bin > /dev/null 2>&1
     [[ -f "$LOCALDESTDIR"/bin/ab-pkg-config ]] &&
         diff -q <(printf '%s' "$script_file") "$LOCALDESTDIR"/bin/ab-pkg-config > /dev/null ||
         printf '%s' "$script_file" > "$LOCALDESTDIR"/bin/ab-pkg-config
@@ -1982,6 +1983,7 @@ create_ab_ccache() {
         ccache_path="$(command -v ccache)"
         ccache_win_path=$(cygpath -m "$ccache_path")
     fi
+    mkdir -p "$LOCALDESTDIR"/bin > /dev/null 2>&1
     for bin in {$MINGW_CHOST-,}{gcc,g++} clang{,++} cc cpp c++; do
         type "$bin" > /dev/null 2>&1 || continue
         cat << EOF > "$temp_file"
@@ -2010,8 +2012,12 @@ create_cmake_toolchain() {
         "SET(CMAKE_PREFIX_PATH $_win_path_LOCALDESTDIR $_win_path_MINGW_PREFIX $_win_path_MINGW_PREFIX/$MINGW_CHOST)"
         "SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)"
         "SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)"
+        "SET(PKG_CONFIG_EXECUTABLE $_win_path_LOCALDESTDIR/bin/ab-pkg-config-static.bat)"
+        "SET(CMAKE_BUILD_TYPE Release)"
+        "SET(BUILD_SHARED_LIBS OFF)"
     )
 
+    mkdir -p "$LOCALDESTDIR"/etc > /dev/null 2>&1
     [[ -f "$LOCALDESTDIR"/etc/toolchain.cmake ]] &&
         diff -q <(printf '%s\n' "${toolchain_file[@]}") "$LOCALDESTDIR"/etc/toolchain.cmake > /dev/null ||
         printf '%s\n' "${toolchain_file[@]}" > "$LOCALDESTDIR"/etc/toolchain.cmake
@@ -2132,10 +2138,10 @@ compare_with_zeranoe() {
         [[ -f $custom32 ]] || custom32="$custom"
         [[ -f $custom64 ]] || custom64="$custom"
         if [[ -f $custom32 ]]; then
-            IFS=$'\n' read -d '' -r -a localopts32 < <(do_readoptionsfile "$custom32")
+            IFS=$'\n' read -d '' -r localopts32 < <(do_readoptionsfile "$custom32")
         fi
         if [[ -f $custom64 ]]; then
-            IFS=$'\n' read -d '' -r -a localopts64 < <(do_readoptionsfile "$custom64")
+            IFS=$'\n' read -d '' -r localopts64 < <(do_readoptionsfile "$custom64")
         fi
     else
         IFS=$'\r\n' read -d '' -r -a bat < /trunk/media-autobuild_suite.bat
