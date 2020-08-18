@@ -157,7 +157,7 @@ if [[ $ripgrep = y || $rav1e = y || $dssim = y ]] || enabled librav1e; then
     if ! files_exist "$RUSTUP_HOME"/bin/rustup.exe; then
         mkdir -p "$LOCALBUILDDIR/rustinstall"
         cd_safe "$LOCALBUILDDIR/rustinstall"
-        log download_rustup curl "https://sh.rustup.rs" -sSo rustup.sh
+        log download_rustup curl --proto '=https' --tlsv1.2 "https://sh.rustup.rs" -sSo rustup.sh
         log install_rust ./rustup.sh -v -y --no-modify-path \
             "--default-host=${MSYSTEM_CARCH}-pc-windows-gnu" \
             --default-toolchain=stable
@@ -274,12 +274,11 @@ if [[ $mplayer = y || $mpv = y ]] ||
     fi
 
     _deps=(libfreetype.a)
-    _check=(libharfbuzz.{,l}a harfbuzz.pc)
+    _check=(libharfbuzz.a harfbuzz.pc)
     if [[ $ffmpeg != sharedlibs ]] && do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
         do_pacman_install ragel
-        NOCONFIGURE=y do_autogen
         do_uninstall include/harfbuzz "${_check[@]}"
-        do_separate_confmakeinstall --with-{icu,glib,gobject,cairo,fontconfig,uniscribe}=no
+        do_mesoninstall -D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}=disabled
         # directwrite shaper doesn't work with mingw headers, maybe too old
         do_checkIfExist
     fi
@@ -938,7 +937,7 @@ if { { [[ $ffmpeg != no ]] &&
     enabled openal; } || mpv_enabled openal; } &&
     do_vcs "https://github.com/kcat/openal-soft.git"; then
     do_uninstall "${_check[@]}"
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/openal-soft/0001-CMake-Fix-issues-for-mingw-w64.patch"
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/openal-soft/0001-CMake-Fix-issues-for-mingw-w64.patch" am
     do_cmakeinstall -DLIBTYPE=STATIC -DALSOFT_UTILS=OFF -DALSOFT_EXAMPLES=OFF
     sed -i 's/Libs.private.*/& -lole32 -lstdc++/' "$LOCALDESTDIR/lib/pkgconfig/openal.pc"
     do_checkIfExist
@@ -1812,7 +1811,7 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
         do_install d3d{kmthk,ukmdt}.h include/
     cd_safe "$(get_first_subdir -f)"
     do_print_progress "Building Vulkan-Loader"
-    do_cmakeinstall -DBUILD_TESTS=OFF -DCMAKE_SYSTEM_NAME=Windows -DUSE_CCACHE=OFF \
+    CFLAGS+=" -DSTRSAFE_NO_DEPRECATE" do_cmakeinstall -DBUILD_TESTS=OFF -DCMAKE_SYSTEM_NAME=Windows -DUSE_CCACHE=OFF \
     -DCMAKE_ASM_COMPILER="$(command -v nasm.exe)" -DVULKAN_HEADERS_INSTALL_DIR="$LOCALDESTDIR" \
     -DENABLE_STATIC_LOADER=ON -DUNIX=OFF
     do_checkIfExist
@@ -2267,8 +2266,10 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         do_checkIfExist
     fi
 
-    _check=(bin-video/mpv.{exe,com})
+    _check=()
+    ! mpv_disabled cplayer && _check+=(bin-video/mpv.{exe,com})
     mpv_enabled libmpv-shared && _check+=(bin-video/mpv-1.dll)
+    mpv_enabled libmpv-static && _check+=(libmpv.a)
     _deps=(lib{ass,avcodec,vapoursynth,shaderc_combined,spirv-cross}.a "$MINGW_PREFIX"/lib/libuchardet.a)
     if do_vcs "https://github.com/mpv-player/mpv.git"; then
         hide_conflicting_libs

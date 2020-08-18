@@ -151,11 +151,11 @@ vcs_clean() {
 # vcs_get_latest_tag "libopenmpt-*"
 vcs_get_latest_tag() {
     if ! case $1 in
-    LATEST) git describe --abbrev=0 --tags "$(git rev-list --tags --max-count=1)" 2> /dev/null ;;
-    GREATEST) git describe --abbrev=0 --tags 2> /dev/null ;;
-    *\**) git describe --abbrev=0 --tags "$(git tag -l "$1" --sort=-version:refname | head -1)" 2> /dev/null ;;
-    *) false ;;
-    esac then
+        LATEST) git describe --abbrev=0 --tags "$(git rev-list --tags --max-count=1)" 2> /dev/null ;;
+        GREATEST) git describe --abbrev=0 --tags 2> /dev/null ;;
+        *\**) git describe --abbrev=0 --tags "$(git tag -l "$1" --sort=-version:refname | head -1)" 2> /dev/null ;;
+        *) false ;;
+        esac then
         echo "$1"
     fi
 }
@@ -202,6 +202,7 @@ vcs_fetch() (
     set -x
     [[ -f $(git rev-parse --git-dir)/shallow ]] && unshallow="--unshallow" || unshallow=''
     git fetch --all -Ppft $unshallow
+    git remote set-head -a origin
 )
 
 # do_mabs_clone "$vcsURL" "$vcsFolder" "$ref"
@@ -450,11 +451,11 @@ do_extract() {
     # accepted: zip, 7z, tar, tar.gz, tar.bz2 and tar.xz
     [[ -z $dirName ]] && dirName=$(guess_dirname "$archive")
     if [[ $dirName != "." && -d $dirName ]]; then
-        if [[ $build32 == "yes" &&
-            ! -f "$dirName/build_successful32bit${flavor:+_$flavor}" ]]; then
+        if [[ $build32 == "yes" && ! -f \
+            "$dirName/build_successful32bit${flavor:+_$flavor}" ]]; then
             rm -rf "$dirName"
-        elif [[ $build64 == "yes" &&
-            ! -f "$dirName/build_successful64bit${flavor:+_$flavor}" ]]; then
+        elif [[ $build64 == "yes" && ! -f \
+            "$dirName/build_successful64bit${flavor:+_$flavor}" ]]; then
             rm -rf "$dirName"
         fi
     elif [[ -d $dirName ]]; then
@@ -885,6 +886,29 @@ do_changeFFmpegConfig() {
             echo -e "${orange}FFmpeg and related apps will depend on CUDA SDK to run!${reset}"
             local fixed_CUDA_PATH
             fixed_CUDA_PATH="$(cygpath -sm "$CUDA_PATH")"
+            if [[ $fixed_CUDA_PATH != "${fixed_CUDA_PATH// /}" ]]; then
+                # Assumes CUDA_PATH backwards is version/CUDA/NVIDIA GPU Computing Toolkit/rest of the path
+                # Strips the onion to the rest of the path
+                {
+                    cat << EOF
+@echo off
+fltmc > NUL 2>&1 || echo Elevation required, right click the script and click 'Run as administrator'. & echo/ & pause & exit /b 1
+cd /d "$(dirname "$(dirname "$(dirname "$(cygpath -sw "$CUDA_PATH")")")")"
+EOF
+                    # Generate up to 4 shortnames
+                    for _n in 1 2 3 4; do
+                        printf 'fsutil file setshortname "NVIDIA GPU Computing Toolkit" NVIDIA~%d || ' "$_n"
+                    done
+                    echo 'echo Failed to set a shortname for your CUDA_PATH'
+                } > "$LOCALBUILDDIR/cuda.bat"
+                do_simple_print "${orange}Spaces detected in the CUDA path"'!'"$reset"
+                do_simple_print "Path returned by windows: ${bold}$fixed_CUDA_PATH${reset}"
+                do_simple_print "A script to create the missing short paths for your CUDA_PATH"
+                do_simple_print "was created at $(cygpath -m "$LOCALBUILDDIR/cuda.bat")"
+                do_simple_print "Please run that script as an administrator and rerun the suite"
+                do_simple_print "${red}This will break FFmpeg compilation, so aborting early"'!'"${reset}"
+                logging=n compilation_fail "do_changeFFmpegConfig"
+            fi
             do_addOption "--extra-cflags=-I$fixed_CUDA_PATH/include"
             do_addOption "--extra-ldflags=-L$fixed_CUDA_PATH/lib/x64"
         fi
@@ -1592,7 +1616,7 @@ do_pacman_remove() {
     local pkg msyspackage=false pkgs
     while true; do
         case "$1" in
-        -m) msyspackage=true && shift;;
+        -m) msyspackage=true && shift ;;
         *) break ;;
         esac
     done
