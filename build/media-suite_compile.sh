@@ -55,6 +55,7 @@ while true; do
     --ripgrep=* ) ripgrep=${1#*=} && shift ;;
     --rav1e=* ) rav1e=${1#*=} && shift ;;
     --dav1d=* ) dav1d=${1#*=} && shift ;;
+    --libavif=* ) libavif=${1#*=} && shift ;;
     --vvc=* ) vvc=${1#*=} && shift ;;
     --jq=* ) jq=${1#*=} && shift ;;
     --jo=* ) jo=${1#*=} && shift ;;
@@ -547,7 +548,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
 
     _check=(libtesseract.{,l}a tesseract.pc)
     if do_vcs "https://github.com/tesseract-ocr/tesseract.git"; then
-        do_pacman_install docbook-xsl libarchive pango asciidoc-py3-git
+        do_pacman_install docbook-xsl libarchive pango asciidoc
         # Don't include curl in tesseract. We aren't mainly using the executable with links.
         # tesseract doesn't have a --disable-curl option or something so it's dumb.
         for _curl_pc in {"$MINGW_PREFIX","$LOCALDESTDIR"}/lib/pkgconfig/libcurl.pc; do
@@ -1062,8 +1063,8 @@ _check=()
 { [[ $rav1e = y ]] ||
     enabled librav1e && [[ $standalone = y ]]; } &&
     _check+=(bin-video/rav1e.exe)
-enabled librav1e && _check+=(librav1e.a rav1e.pc rav1e/rav1e.h)
-if { [[ $rav1e = y ]] || enabled librav1e; } &&
+{ enabled librav1e || [[ $libavif = y ]]; } && _check+=(librav1e.a rav1e.pc rav1e/rav1e.h)
+if { [[ $rav1e = y ]] || [[ $libavif = y ]] || enabled librav1e; } &&
     do_vcs "https://github.com/xiph/rav1e.git"; then
     do_uninstall "${_check[@]}" include/rav1e
 
@@ -1074,45 +1075,39 @@ if { [[ $rav1e = y ]] || enabled librav1e; } &&
     fi
 
     # C lib
-    if enabled librav1e; then
-        old_cpath=$CPATH
-        old_libpath=$LIBRARY_PATH
-        CPATH=$(cygpath -m "$LOCALDESTDIR/include" "$MINGW_PREFIX/include" "$MINGW_PREFIX/$MINGW_CHOST/include" | tr '\n' ' ')
-        LIBRARY_PATH=$(cygpath -m "$LOCALDESTDIR/lib" "$MINGW_PREFIX/lib" "$MINGW_PREFIX/$MINGW_CHOST/lib" | tr '\n' ' ')
-        export CPATH LIBRARY_PATH
-
+    if [[ $libavif = y ]] || enabled librav1e; then
         rm -f "$CARGO_HOME/config" 2> /dev/null
         log "install-rav1e-c" "$RUSTUP_HOME/bin/cargo.exe" capi install \
-            --release --prefix "$PWD/install-$bits" --jobs "$cpuCount"
-
-        mapfile -t compiler_builtins < <(
-            for a in ___chkstk_ms __udivmoddi4 __divmoddi4 __udivti3; do
-                nm -CAg --defined-only "install-$bits/lib/librav1e.a" | grep -- "$a" | cut -d: -f2
-            done | sort -u
-        )
-        ar x "install-$bits/lib/librav1e.a" "${compiler_builtins[@]}"
-        # Just weaken the whole object, the symbols probably exist in libgcc
-        for compiler_builtin in "${compiler_builtins[@]}"; do
-            objcopy --weaken "$compiler_builtin"
-        done
-        ar r "install-$bits/lib/librav1e.a" "${compiler_builtins[@]}"
-        rm "${compiler_builtins[@]}"
-
-        (
-            _rav1e_install_win_path=$(cygpath -m "$PWD/install-$bits")
-            _rav1e_dest_win_path=$(cygpath -m "$LOCALDESTDIR")
-            grep_and_sed "$_rav1e_install_win_path" "install-$bits/lib/pkgconfig/rav1e.pc" "s#$_rav1e_install_win_path#$_rav1e_dest_win_path#"
-        )
+            --release --jobs "$cpuCount" --prefix="$LOCALDESTDIR" \
+            --destdir="$PWD/install-$bits"
 
         # do_install "install-$bits/bin/rav1e.dll" bin-video/
         # do_install "install-$bits/lib/librav1e.dll.a" lib/
-        do_install "install-$bits/lib/librav1e.a" lib/
-        do_install "install-$bits/lib/pkgconfig/rav1e.pc" lib/pkgconfig/
-        do_install "install-$bits/include/rav1e"/*.h include/rav1e/
-        export CPATH=$old_cpath LIBRARY_PATH=$old_libpath
-        unset old_cpath old_libpath
+        do_install "$(find install-64bit/ -name "librav1e.a")" lib/
+        do_install "$(find install-64bit/ -name "rav1e.pc")" lib/pkgconfig/
+        do_install "$(find install-64bit/ -name "rav1e")"/*.h include/rav1e/
     fi
 
+    do_checkIfExist
+fi
+
+_check=(libavif.{a,pc} avif/avif.h)
+[[ $standalone = y ]] && _check+=(bin-video/avif{enc,dec}.exe)
+if [[ $libavif = y ]] && {
+        pc_exists "aom" || pc_exists "dav1d" || pc_exists "rav1e"
+    } &&
+    do_vcs "https://github.com/AOMediaCodec/libavif.git"; then
+    do_uninstall "${_check[@]}"
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0001-CMake-Use-the-import-libraries-and-the-proper-variab.patch" am
+    extracommands=()
+    pc_exists "dav1d" && extracommands+=("-DAVIF_CODEC_DAV1D=ON")
+    pc_exists "rav1e" && extracommands+=("-DAVIF_CODEC_RAV1E=ON")
+    pc_exists "aom" && extracommands+=("-DAVIF_CODEC_AOM=ON")
+    case $standalone in
+    y) extracommands+=("-DAVIF_BUILD_APPS=ON") ;;
+    *) extracommands+=("-DAVIF_BUILD_APPS=OFF") ;;
+    esac
+    do_cmakeinstall video "${extracommands[@]}"
     do_checkIfExist
 fi
 
@@ -1911,16 +1906,6 @@ if [[ $ffmpeg != no ]]; then
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
 
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-glslang-add-MachineIndependent.patch" am
-
-        # ((TEMPORARY SVT-VP9 MEASURES))
-        # Reasons for this codeblock = https://github.com/m-ab-s/media-autobuild_suite/pull/1619#issuecomment-616206347
-        if enabled libsvtvp9; then
-            enabled libxvid && do_removeOption --enable-libxvid &&
-                do_print_progress "Until an upstream fix is issued, libxvid must be disabled when compiling with libsvtvp9."
-            enabled libsvtav1 && do_removeOption --enable-libsvtav1 &&
-                do_print_progress "Until an upstream fix is issued, libsvtav1 must be disabled when compiling with libsvtvp9."
-        fi
-        # (/(TEMPORARY SVT-VP9 MEASURES))
 
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
