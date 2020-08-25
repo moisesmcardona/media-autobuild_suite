@@ -1019,7 +1019,7 @@ if [[ $aom = y || $standalone = y ]]; then
 else
     _aom_bins=false
 fi
-if { [[ $aom = y ]] || { [[ $ffmpeg != no ]] && enabled libaom; }; } &&
+if { [[ $aom = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libaom; }; } &&
     do_vcs "https://aomedia.googlesource.com/aom"; then
     extracommands=()
     if $_aom_bins; then
@@ -1041,7 +1041,7 @@ unset _aom_bins
 
 _check=(dav1d/dav1d.h dav1d.pc libdav1d.a)
 [[ $standalone = y ]] && _check+=(bin-video/dav1d.exe)
-if { [[ $dav1d = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
+if { [[ $dav1d = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
     do_vcs "https://code.videolan.org/videolan/dav1d.git"; then
     do_uninstall include/dav1d "${_check[@]}"
     extracommands=()
@@ -1051,7 +1051,7 @@ if { [[ $dav1d = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
 fi
 
 _check=(/opt/cargo/bin/cargo-c{build,api}.exe)
-if enabled librav1e &&
+if { enabled librav1e || [[ $libavif = y ]]; } &&
     do_vcs "https://github.com/lu-zero/cargo-c.git"; then
     # Delete any old cargo-cbuilds
     [[ -x /opt/cargo/bin/cargo-cbuild.exe ]] && log uninstall.cargo-c cargo uninstall -q cargo-c
@@ -1083,9 +1083,9 @@ if { [[ $rav1e = y ]] || [[ $libavif = y ]] || enabled librav1e; } &&
 
         # do_install "install-$bits/bin/rav1e.dll" bin-video/
         # do_install "install-$bits/lib/librav1e.dll.a" lib/
-        do_install "$(find install-64bit/ -name "librav1e.a")" lib/
-        do_install "$(find install-64bit/ -name "rav1e.pc")" lib/pkgconfig/
-        do_install "$(find install-64bit/ -name "rav1e")"/*.h include/rav1e/
+        do_install "$(find "install-$bits/" -name "librav1e.a")" lib/
+        do_install "$(find "install-$bits/" -name "rav1e.pc")" lib/pkgconfig/
+        do_install "$(find "install-$bits/" -name "rav1e")"/*.h include/rav1e/
     fi
 
     do_checkIfExist
@@ -1694,7 +1694,7 @@ if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
         do_checkIfExist
     fi
 
-    _vsver=51
+    _vsver=52
     _check=(lib{vapoursynth,vsscript}.a vapoursynth{,-script}.pc vapoursynth/{VS{Helper,Script},VapourSynth}.h)
     if pc_exists "vapoursynth = $_vsver" && files_exist "${_check[@]}"; then
         do_print_status "vapoursynth R$_vsver" "$green" "Up-to-date"
@@ -1932,9 +1932,14 @@ if [[ $ffmpeg != no ]]; then
         fi
 
         if enabled openal &&
-            ! do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-openal-use-check_pkg_config.patch" am; then
-            do_removeOption "--enable-openal"
-            do_removeOption FFMPEG_OPTS_SHARED "--enable-openal"
+            pc_exists "openal"; then
+            OPENAL_LIBS=$($PKG_CONFIG --libs openal)
+            export OPENAL_LIBS
+            do_addOption "--extra-cflags=-DAL_LIBTYPE_STATIC"
+            for _openal_flag in $($PKG_CONFIG --cflags openal); do
+                do_addOption "--extra-cflags=$_openal_flag"
+            done
+            unset _openal_flag
         fi
 
         _patches=$(git rev-list origin/master.. --count)
