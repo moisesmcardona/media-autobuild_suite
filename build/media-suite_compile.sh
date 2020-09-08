@@ -903,7 +903,6 @@ fi
 
 _check=(libflite.a flite/flite.h)
 if enabled libflite && do_vcs "https://github.com/festvox/flite.git"; then
-    do_patch "https://github.com/festvox/flite/pull/15.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/flite/0001-tools-find_sts_main.c-Include-windows.h-before-defin.patch" am
     do_uninstall libflite_cmu_{grapheme,indic}_{lang,lex}.a \
         libflite_cmu_us_{awb,kal,kal16,rms,slt}.a \
@@ -1115,11 +1114,12 @@ _check=(libkvazaar.{,l}a kvazaar.pc kvazaar.h)
 [[ $standalone = y ]] && _check+=(bin-video/kvazaar.exe)
 if { [[ $other265 = y ]] || { [[ $ffmpeg != no ]] && enabled libkvazaar; }; } &&
     do_vcs "https://github.com/ultravideo/kvazaar.git"; then
+    do_patch "https://github.com/m-ab-s/mabs-patches/raw/master/kvazaar/0001-Mingw-w64-Re-enable-avx2.patch" am
     do_uninstall kvazaar_version.h "${_check[@]}"
     do_autogen
     [[ $standalone = y || $other265 = y ]] ||
         sed -i "s|bin_PROGRAMS = .*||" src/Makefile.in
-    do_separate_confmakeinstall video
+    CFLAGS+=" -fno-asynchronous-unwind-tables" do_separate_confmakeinstall video
     do_checkIfExist
 fi
 
@@ -1234,6 +1234,7 @@ fi
 _check=(libxavs.a xavs.{h,pc})
 if [[ $ffmpeg != no ]] && enabled libxavs && do_pkgConfig "xavs = 0.1." "0.1" &&
     do_vcs "https://github.com/Distrotech/xavs.git"; then
+    do_patch "https://github.com/Distrotech/xavs/pull/1.patch"
     [[ -f libxavs.a ]] && log "distclean" make distclean
     do_uninstall "${_check[@]}"
     sed -i 's|"NUL"|"/dev/null"|g' configure
@@ -1312,6 +1313,9 @@ fi
 _check=(libvidstab.a vidstab.pc)
 if [[ $ffmpeg != no ]] && enabled libvidstab && do_pkgConfig "vidstab = 1.10" &&
     do_vcs "https://github.com/georgmartius/vid.stab.git" vidstab; then
+    do_pacman_install openmp
+    do_patch "https://github.com/georgmartius/vid.stab/pull/90.patch" am
+    do_patch "https://github.com/georgmartius/vid.stab/pull/91.patch" am
     do_uninstall include/vid.stab "${_check[@]}"
     do_cmakeinstall
     do_checkIfExist
@@ -1904,9 +1908,6 @@ if [[ $ffmpeg != no ]]; then
     [[ $ffmpegUpdate = y ]] && enabled_any lib{aom,tesseract,vmaf,x265,vpx} &&
         _deps=(lib{aom,tesseract,vmaf,x265,vpx}.a)
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
-
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-glslang-add-MachineIndependent.patch" am
-
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
 
@@ -2281,6 +2282,10 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
             fi
         fi
         enabled libtesseract && mpv_cflags+=("-fopenmp") mpv_ldflags+=("-lgomp")
+        enabled libvidstab && {
+            mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_cflags < <($PKG_CONFIG --libs vidstab)
+            mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_ldflags < <($PKG_CONFIG --libs vidstab)
+        }
         enabled libssh && mpv_ldflags+=("-Wl,--allow-multiple-definition")
         if ! mpv_disabled manpage-build || mpv_enabled html-build; then
             do_pacman_install python-docutils
