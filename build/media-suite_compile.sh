@@ -477,6 +477,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
         do_pacman_install libjpeg-turbo xz zlib zstd
         do_uninstall "${_check[@]}"
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libtiff/0001-tiffgt-Link-winmm-if-windows.patch" am
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libtiff/0002-CMake-Set-CMP0060-to-NEW-for-glut-libs.patch" am
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
             '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd'
         CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX}=OFF
@@ -559,6 +560,10 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         do_uninstall include/tesseract "${_check[@]}"
         sed -i -e 's|Libs.private.*|& -lstdc++|' \
                -e 's|Requires.private.*|& libarchive iconv|' tesseract.pc.in
+        case $CC in
+        *gcc) sed -i -e 's|Libs.private.*|& -fopenmp -lgomp|' tesseract.pc.in ;;
+        *clang) sed -i -e 's|Libs.private.*|& -fopenmp=libomp|' tesseract.pc.in ;;
+        esac
         do_separate_confmakeinstall global --disable-{graphics,tessdata-prefix} \
             LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" \
             LIBS="$($PKG_CONFIG --libs iconv lept)" --datadir="$LOCALDESTDIR/bin-global"
@@ -1098,6 +1103,7 @@ if [[ $libavif = y ]] && {
     } &&
     do_vcs "https://github.com/AOMediaCodec/libavif.git"; then
     do_uninstall "${_check[@]}"
+    do_pacman_install libjpeg-turbo
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0001-CMake-Use-the-import-libraries-and-the-proper-variab.patch" am
     extracommands=()
     pc_exists "dav1d" && extracommands+=("-DAVIF_CODEC_DAV1D=ON")
@@ -1312,11 +1318,9 @@ if [[ $mediainfo = y ]]; then
 fi
 
 _check=(libvidstab.a vidstab.pc)
-if [[ $ffmpeg != no ]] && enabled libvidstab && do_pkgConfig "vidstab = 1.10" &&
+if [[ $ffmpeg != no ]] && enabled libvidstab &&
     do_vcs "https://github.com/georgmartius/vid.stab.git" vidstab; then
     do_pacman_install openmp
-    do_patch "https://github.com/georgmartius/vid.stab/pull/90.patch" am
-    do_patch "https://github.com/georgmartius/vid.stab/pull/91.patch" am
     do_uninstall include/vid.stab "${_check[@]}"
     do_cmakeinstall
     do_checkIfExist
@@ -1928,11 +1932,6 @@ if [[ $ffmpeg != no ]]; then
         enabled vapoursynth &&
             do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-Add-Alternative-VapourSynth-demuxer.patch" am
 
-        if [[ ${#FFMPEG_OPTS[@]} -gt 35 ]]; then
-            # remove redundant -L and -l flags from extralibs
-            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-configure-deduplicate-linking-flags.patch" am
-        fi
-
         if enabled openal &&
             pc_exists "openal"; then
             OPENAL_LIBS=$($PKG_CONFIG --libs openal)
@@ -1943,6 +1942,11 @@ if [[ $ffmpeg != no ]]; then
                 do_addOption "--extra-cflags=$_openal_flag"
             done
             unset _openal_flag
+        fi
+
+        if [[ ${#FFMPEG_OPTS[@]} -gt 35 ]]; then
+            # remove redundant -L and -l flags from extralibs
+            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-configure-deduplicate-linking-flags.patch" am
         fi
 
         _patches=$(git rev-list origin/master.. --count)
@@ -2265,6 +2269,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     mpv_enabled libmpv-static && _check+=(libmpv.a)
     _deps=(lib{ass,avcodec,vapoursynth,shaderc_combined,spirv-cross}.a "$MINGW_PREFIX"/lib/libuchardet.a)
     if do_vcs "https://github.com/mpv-player/mpv.git"; then
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/mpv/0001-Mingw-w64-Use-Wl-subsystem-console-instead-of-mconso.patch" am
         hide_conflicting_libs
         create_ab_pkgconfig
 
@@ -2282,7 +2287,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
                 mpv_ldflags+=("-L$(cygpath -sm "$CUDA_PATH")/lib/x64")
             fi
         fi
-        enabled libtesseract && mpv_cflags+=("-fopenmp") mpv_ldflags+=("-lgomp")
+
         enabled libvidstab && {
             mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_cflags < <($PKG_CONFIG --libs vidstab)
             mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_ldflags < <($PKG_CONFIG --libs vidstab)
@@ -2668,6 +2673,7 @@ if [[ $vlc == y ]]; then
             "$LOCALDESTDIR"/vlc/include/vlc/libvlc_version.h)
     if do_vcs "https://code.videolan.org/videolan/vlc.git"; then
         do_uninstall bin/plugins lib/vlc "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/vlc/0001-srt-Replace-SRTO_TSBPDDELAY-with-SRTO_LATENCY.patch" am
         # https://code.videolan.org/videolan/medialibrary/issues/220
         # msys2's patches
         # Issues due to conflicting `vlc_module_name` between libvlc and libvlccore when linking vlc-static.exe and undefines.
