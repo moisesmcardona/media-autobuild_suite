@@ -609,7 +609,7 @@ set_title "compiling audio tools"
 do_simple_print -p '\n\t'"${orange}Starting $bits compilation of audio tools${reset}"
 
 if [[ $ffmpeg != no || $sox = y ]]; then
-    enabled libwavpack && do_pacman_install wavpack
+    do_pacman_install wavpack
     enabled_any libopencore-amr{wb,nb} && do_pacman_install opencore-amr
     if enabled libtwolame; then
         do_pacman_install twolame
@@ -815,18 +815,18 @@ if [[ $standalone = y ]] && enabled libmp3lame; then
             -h ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e \
             "lame/lame/3.100/lame-3.100.tar.gz"; then
         do_uninstall include/lame libmp3lame.{l,}a "${_check[@]}"
-        _mingw_patches="https://raw.githubusercontent.com/Alexpux/MINGW-packages/master"
-        do_patch "$_mingw_patches/mingw-w64-lame/0002-07-field-width-fix.all.patch"
-        do_patch "$_mingw_patches/mingw-w64-lame/0005-no-gtk.all.patch"
-        do_patch "$_mingw_patches/mingw-w64-lame/0006-dont-use-outdated-symbol-list.patch"
-        do_patch "$_mingw_patches/mingw-w64-lame/0007-revert-posix-code.patch"
-        do_patch "$_mingw_patches/mingw-w64-lame/0008-skip-termcap.patch"
+        _mingw_patches_lame="https://raw.githubusercontent.com/Alexpux/MINGW-packages/master/mingw-w64-lame"
+        do_patch "$_mingw_patches_lame/0005-no-gtk.all.patch"
+        do_patch "$_mingw_patches_lame/0006-dont-use-outdated-symbol-list.patch"
+        do_patch "$_mingw_patches_lame/0007-revert-posix-code.patch"
+        do_patch "$_mingw_patches_lame/0008-skip-termcap.patch"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/lame/0001-libmp3lame-vector-Makefile.am-Add-msse-to-fix-i686-c.patch"
         do_autoreconf
         do_separate_conf --enable-nasm
         do_make
         do_install frontend/lame.exe bin-audio/
         do_checkIfExist
-        unset _mingw_patches
+        unset _mingw_patches_lame
     fi
 fi
 
@@ -874,7 +874,6 @@ if [[ $sox = y ]] && do_pkgConfig "sox = 14.4.2" &&
     fi
     enabled libtwolame || extracommands+=(--without-twolame)
     enabled libvorbis || extracommands+=(--without-oggvorbis)
-    enabled libwavpack || extracommands+=(--without-wavpack)
     hide_conflicting_libs
     sed -i 's|found_libgsm=yes|found_libgsm=no|g' configure
     do_separate_conf --disable-symlinks LIBS='-lshlwapi -lz' "${extracommands[@]}"
@@ -1422,9 +1421,9 @@ _check=(bin-video/SvtAv1{Enc,Dec}App.exe
 if [[ $bits = 32bit ]]; then
     do_removeOption --enable-libsvtav1
 elif { [[ $svtav1 = y ]] || enabled libsvtav1; } &&
-    do_vcs "https://github.com/OpenVisualCloud/SVT-AV1.git"; then
-	do_patch "https://gist.githubusercontent.com/moisespr123/39aeae9b4968ea9407f7c38ef1d26923/raw/00b238360f8590b2f26e10e33038e9199a423dc3/svt-av1-encoded-frames"
+    do_vcs "https://github.com/AOMediaCodec/SVT-AV1.git"; then
     do_uninstall include/svt-av1 "${_check[@]}" include/svt-av1
+    do_patch "https://github.com/AOMediaCodec/SVT-AV1/pull/1501.patch" am
     do_cmakeinstall video -DUNIX=OFF
     do_checkIfExist
 fi
@@ -2269,7 +2268,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     mpv_enabled libmpv-static && _check+=(libmpv.a)
     _deps=(lib{ass,avcodec,vapoursynth,shaderc_combined,spirv-cross}.a "$MINGW_PREFIX"/lib/libuchardet.a)
     if do_vcs "https://github.com/mpv-player/mpv.git"; then
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/mpv/0001-Mingw-w64-Use-Wl-subsystem-console-instead-of-mconso.patch" am
+        do_patch "https://github.com/mpv-player/mpv/pull/8073.patch" am
         hide_conflicting_libs
         create_ab_pkgconfig
 
@@ -2365,6 +2364,7 @@ if [[ $bmx = y ]]; then
 
     _check=(bin-video/MXFDump.exe libMXF-1.0.{{,l}a,pc})
     if do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/libmxf.git" libMXF-1.0; then
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libmxf/0001-Add-spaces-between-quotes-and-literal.patch" am
         do_autogen
         do_uninstall include/libMXF-1.0 "${_check[@]}"
         do_separate_confmakeinstall video --disable-examples
