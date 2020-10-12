@@ -25,6 +25,8 @@ For information about the compiler environment see the wiki, there you also have
         - ffnvcodec (git)
         - libaom (git)
         - libdav1d (git)
+        - libfdk-aac (git)
+            - needs non-free license if not LGPL
         - libmp3lame (mingw-w64)
         - libopus (mingw-w64)
         - libvorbis (mingw-w64)
@@ -92,8 +94,6 @@ For information about the compiler environment see the wiki, there you also have
         - libcdio (mingw-w64)
         - libcodec2 (git)
         - libdavs2 (git)
-        - libfdk-aac (git)
-            - needs non-free license if not LGPL
         - libflite (git)
         - libfribidi (latest release)
         - libglslang (git)
@@ -111,6 +111,7 @@ For information about the compiler environment see the wiki, there you also have
         - libsvthevc (git) (using non-upstream patch)
         - libsvtvp9 (git) (using non-upstream patch)
         - libtesseract (git)
+        - libuavs3d (git)
         - libxavs (git)
         - libxavs2 (git)
         - libzmq (mingw-w64)

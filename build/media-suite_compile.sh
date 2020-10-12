@@ -851,7 +851,7 @@ if [[ $ffmpeg != no ]] && enabled libbs2b && do_pkgConfig "libbs2b = 3.1.0" &&
 fi
 
 _check=(libsndfile.a sndfile.{h,pc})
-if [[ $sox = y ]] && do_vcs "https://github.com/erikd/libsndfile.git" sndfile; then
+if [[ $sox = y ]] && do_vcs "https://github.com/libsndfile/libsndfile.git" sndfile; then
     do_uninstall include/sndfile.hh "${_check[@]}"
     do_cmakeinstall -DBUILD_EXAMPLES=off -DBUILD_TESTING=off -DBUILD_PROGRAMS=OFF
     do_checkIfExist
@@ -1004,13 +1004,11 @@ else
 fi
 
 _check=(libvmaf.{a,pc} libvmaf/libvmaf.h)
-if [[ $bits = 32bit ]]; then
-    do_removeOption --enable-libvmaf
-elif [[ $ffmpeg != no ]] && enabled libvmaf &&
+if [[ $ffmpeg != no ]] && enabled libvmaf &&
     do_vcs "https://github.com/Netflix/vmaf.git"; then
     do_uninstall share/model "${_check[@]}"
     cd_safe libvmaf
-    do_mesoninstall video
+    CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" do_mesoninstall video
     do_checkIfExist
 fi
 file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
@@ -1280,6 +1278,15 @@ elif { [[ $avs2 = y ]] || { [[ $ffmpeg != no ]] && enabled libdavs2; }; } &&
     do_checkIfExist
 fi
 
+_check=(libuavs3d.a uavs3d.{h,pc})
+[[ $standalone = y ]] && _check+=(bin-video/uavs3dec.exe)
+if [[ $ffmpeg != no ]] && enabled libuavs3d &&
+    do_vcs "https://github.com/uavs3/uavs3d.git"; then
+    do_cmakeinstall
+    [[ $standalone = y ]] && do_install uavs3dec.exe bin-video/
+    do_checkIfExist
+fi
+
 if [[ $mediainfo = y ]]; then
     [[ $curl = openssl ]] && hide_libressl
     _check=(libzen.{a,pc})
@@ -1321,6 +1328,7 @@ if [[ $ffmpeg != no ]] && enabled libvidstab &&
     do_vcs "https://github.com/georgmartius/vid.stab.git" vidstab; then
     do_pacman_install openmp
     do_uninstall include/vid.stab "${_check[@]}"
+    do_patch "https://github.com/georgmartius/vid.stab/pull/94.patch" am
     do_cmakeinstall
     do_checkIfExist
     add_to_remove
@@ -1466,6 +1474,7 @@ if [[ $x264 != no ]]; then
         if [[ $standalone = y && $x264 =~ (full|fullv) ]]; then
             _check=("$LOCALDESTDIR"/opt/lightffmpeg/lib/pkgconfig/libav{codec,format}.pc)
             do_vcs "https://git.ffmpeg.org/ffmpeg.git"
+            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-get_cabac_inline_x86-Don-t-inline-if-32-bit-clang-on.patch" am
             do_uninstall "$LOCALDESTDIR"/opt/lightffmpeg
             [[ -f config.mak ]] && log "distclean" make distclean
             create_build_dir light
@@ -1648,21 +1657,19 @@ else
 fi
 pc_exists x265 && sed -i 's|-lmingwex||g' "$(file_installed x265.pc)"
 
-_check=(xvid.h libxvidcore.a bin-video/xvid{_encraw.exe,core.dll})
-if enabled libxvid && [[ $standalone = y ]] && ! { files_exist "${_check[@]}" &&
-    grep -q '1.3.7' "$LOCALDESTDIR/bin-video/xvid_encraw.exe"; } &&
-    do_wget -h abbdcbd39555691dd1c9b4d08f0a031376a3b211652c0d8b3b8aa9be1303ce2d \
-        "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz" "xvidcore.tar.gz"; then
+_check=(xvid.h libxvidcore.a bin-video/xvid_encraw.exe)
+if enabled libxvid && [[ $standalone = y ]] &&
+    do_vcs "https://github.com/m-ab-s/xvid.git"; then
+    do_patch "https://github.com/m-ab-s/xvid/compare/lighde.patch" am
     do_pacman_remove xvidcore
     do_uninstall "${_check[@]}"
-    cd_safe build/generic
+    cd_safe xvidcore/build/generic
+    log "bootstrap" ./bootstrap.sh
     do_configure
     do_make
     do_install ../../src/xvid.h include/
-    do_install '=build/xvidcore.a' libxvidcore.a
-    do_install '=build/xvidcore.dll' bin-video/
+    do_install '=build/libxvidcore.a' libxvidcore.a
     cd_safe ../../examples
-    sed -ri "s;(#define MAX_ZONES\s*) \S.*$;\1 8192;" xvid_encraw.c
     do_make xvid_encraw
     do_install xvid_encraw.exe bin-video/
     do_checkIfExist
@@ -1800,9 +1807,10 @@ _check=(libvulkan.a vulkan.pc vulkan/vulkan.h d3d{kmthk,ukmdt}.h)
 if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     do_vcs "https://github.com/KhronosGroup/Vulkan-Loader.git" vulkan-loader; then
     _DeadSix27=https://raw.githubusercontent.com/DeadSix27/python_cross_compile_script/master
+    _mabs=https://raw.githubusercontent.com/m-ab-s/mabs-patches/master
     _shinchiro=https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master
     do_uninstall "${_check[@]}"
-    do_patch "$_shinchiro/packages/vulkan-0001-cross-compile-static-linking-hacks.patch" am
+    do_patch "$_mabs/vulkan-loader/vulkan-0001-cross-compile-static-linking-hacks.patch" am
     create_build_dir
     log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
     cd_safe Vulkan-Headers
@@ -1814,11 +1822,11 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
         do_install d3d{kmthk,ukmdt}.h include/
     cd_safe "$(get_first_subdir -f)"
     do_print_progress "Building Vulkan-Loader"
-    CFLAGS+=" -DSTRSAFE_NO_DEPRECATE" do_cmakeinstall -DBUILD_TESTS=OFF -DCMAKE_SYSTEM_NAME=Windows -DUSE_CCACHE=OFF \
-    -DCMAKE_ASM_COMPILER="$(command -v nasm.exe)" -DVULKAN_HEADERS_INSTALL_DIR="$LOCALDESTDIR" \
-    -DENABLE_STATIC_LOADER=ON -DUNIX=OFF
+    CFLAGS+=" -DSTRSAFE_NO_DEPRECATE" do_cmakeinstall -DBUILD_TESTS=OFF -DUSE_CCACHE=OFF \
+    -DUSE_UNSAFE_C_GEN=ON -DVULKAN_HEADERS_INSTALL_DIR="$LOCALDESTDIR" \
+    -DBUILD_STATIC_LOADER=ON -DUNIX=OFF
     do_checkIfExist
-    unset _DeadSix27 _shinchiro
+    unset _DeadSix27 _mabs _shinchiro
 fi
 
 _check=(lib{glslang,OSDependent,HLSL,OGLCompiler,SPVRemapper}.a
@@ -1914,6 +1922,8 @@ if [[ $ffmpeg != no ]]; then
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
+
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-get_cabac_inline_x86-Don-t-inline-if-32-bit-clang-on.patch" am
 
         if enabled libsvthevc; then
             do_patch "https://raw.githubusercontent.com/OpenVisualCloud/SVT-HEVC/master/ffmpeg_plugin/0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch" am ||
@@ -2291,7 +2301,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
             mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_cflags < <($PKG_CONFIG --libs vidstab)
             mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_ldflags < <($PKG_CONFIG --libs vidstab)
         }
-        enabled libssh && mpv_ldflags+=("-Wl,--allow-multiple-definition")
+        enabled_any libssh libxavs2 && mpv_ldflags+=("-Wl,--allow-multiple-definition")
         if ! mpv_disabled manpage-build || mpv_enabled html-build; then
             do_pacman_install python-docutils
         fi
@@ -2399,6 +2409,7 @@ if [[ $cyanrip = y ]]; then
     _check=(neon/ne_utils.h libneon.a neon.pc)
     if do_vcs "https://github.com/notroj/neon.git"; then
         do_uninstall include/neon "${_check[@]}"
+        do_patch "https://github.com/notroj/neon/pull/39.patch" am
         do_autogen
         do_separate_confmakeinstall --disable-{nls,debug,webdav}
         do_checkIfExist

@@ -114,7 +114,7 @@ iconv lzma nvenc schannel zlib sdl2 ffnvcodec nvdec cuda-llvm
 
 :: common external libs
 set ffmpeg_options_basic=gmp libmp3lame libopus libvorbis libvpx libx264 libx265 ^
-libdav1d libaom --disable-debug
+libdav1d libaom --disable-debug libfdk-aac
 
 :: options used in zeranoe builds and not present above
 set ffmpeg_options_zeranoe=fontconfig gnutls libass libbluray libfreetype ^
@@ -125,10 +125,10 @@ libopenmpt version3 librav1e libsrt libgsm libvmaf libsvtav1
 
 :: options also available with the suite
 set ffmpeg_options_full=chromaprint decklink frei0r libbs2b libcaca ^
-libcdio libfdk-aac libflite libfribidi libgme libilbc libsvthevc ^
+libcdio libflite libfribidi libgme libilbc libsvthevc ^
 libsvtvp9 libkvazaar libmodplug librtmp librubberband #libssh libtesseract libxavs ^
 libzmq libzvbi openal libcodec2 ladspa vapoursynth liblensfun ^
-libglslang vulkan
+libglslang vulkan libdavs2 libxavs2 libuavs3d
 
 :: options also available with the suite that add shared dependencies
 set ffmpeg_options_full_shared=opencl opengl cuda-nvcc libnpp libopenh264
