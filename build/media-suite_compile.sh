@@ -154,7 +154,7 @@ if [[ $packing = y &&
 fi
 
 _check=("$RUSTUP_HOME"/bin/rustup.exe)
-if [[ $ripgrep = y || $rav1e = y || $dssim = y ]] || enabled librav1e; then
+if [[ $ripgrep = y || $rav1e = y || $dssim = y || $libavif = y ]] || enabled librav1e; then
     if ! files_exist "$RUSTUP_HOME"/bin/rustup.exe; then
         mkdir -p "$LOCALBUILDDIR/rustinstall"
         cd_safe "$LOCALBUILDDIR/rustinstall"
@@ -1669,6 +1669,7 @@ if enabled libxvid && [[ $standalone = y ]] &&
     do_make
     do_install ../../src/xvid.h include/
     do_install '=build/libxvidcore.a' libxvidcore.a
+    do_install '=build/libxvidcore.dll' bin-video/
     cd_safe ../../examples
     do_make xvid_encraw
     do_install xvid_encraw.exe bin-video/
@@ -2278,7 +2279,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     mpv_enabled libmpv-static && _check+=(libmpv.a)
     _deps=(lib{ass,avcodec,vapoursynth,shaderc_combined,spirv-cross}.a "$MINGW_PREFIX"/lib/libuchardet.a)
     if do_vcs "https://github.com/mpv-player/mpv.git"; then
-        do_patch "https://github.com/mpv-player/mpv/pull/8073.patch" am
         hide_conflicting_libs
         create_ab_pkgconfig
 
