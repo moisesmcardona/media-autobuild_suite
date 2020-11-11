@@ -408,9 +408,14 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
 fi
 
 # fix retarded google naming schemes for brotli
-pacman -Qs "$MINGW_PACKAGE_PREFIX-brotli" > /dev/null 2>&1 &&
-    grep_or_sed '-static' "$MINGW_PREFIX"/lib/pkgconfig/libbrotlidec.pc 's;-lbrotli.*;&-static;' \
-        "$MINGW_PREFIX"/lib/pkgconfig/libbrotli{enc,dec,common}.pc
+do_pacman_install brotli
+grep_and_sed '-static' "$MINGW_PREFIX"/lib/pkgconfig/libbrotlidec.pc 's;-static;;' \
+    "$MINGW_PREFIX"/lib/pkgconfig/libbrotli{enc,dec,common}.pc
+for lib in common dec enc; do
+    lib=$MINGW_PREFIX/lib/libbrotli$lib
+    ln -sf "$lib-static.a" "$lib.a"
+done
+unset lib
 
 _check=(curl/curl.h libcurl.{{,l}a,pc})
 case $curl in
@@ -424,9 +429,7 @@ esac
 if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]] &&
     do_vcs "https://github.com/curl/curl.git#tag=LATEST"; then
     do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-curl/0003-libpsl-static-libs.patch"
-    do_pacman_install nghttp2 brotli
-
-    grep_or_sed brotlidec-static configure.ac 's;CHECK_LIB\(brotlidec;&-static;'
+    do_pacman_install nghttp2
 
     do_uninstall include/curl bin-global/curl-config "${_check[@]}"
     [[ $standalone = y || $curl != n ]] ||
@@ -600,6 +603,7 @@ _check=(zimg{.h,++.hpp} libzimg.{,l}a zimg.pc)
 if [[ $ffmpeg != no ]] && enabled libzimg &&
     do_vcs "https://github.com/sekrit-twc/zimg.git"; then
     do_uninstall "${_check[@]}"
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/zimg/0001-libm_wrapper-define-__CRT__NO_INLINE-before-math.h.patch" am
     do_autoreconf
     do_separate_confmakeinstall
     do_checkIfExist
@@ -1328,7 +1332,6 @@ if [[ $ffmpeg != no ]] && enabled libvidstab &&
     do_vcs "https://github.com/georgmartius/vid.stab.git" vidstab; then
     do_pacman_install openmp
     do_uninstall include/vid.stab "${_check[@]}"
-    do_patch "https://github.com/georgmartius/vid.stab/pull/94.patch" am
     do_cmakeinstall
     do_checkIfExist
     add_to_remove
@@ -1431,7 +1434,6 @@ if [[ $bits = 32bit ]]; then
 elif { [[ $svtav1 = y ]] || enabled libsvtav1; } &&
     do_vcs "https://github.com/AOMediaCodec/SVT-AV1.git"; then
     do_uninstall include/svt-av1 "${_check[@]}" include/svt-av1
-    do_patch "https://github.com/AOMediaCodec/SVT-AV1/pull/1501.patch" am
     do_cmakeinstall video -DUNIX=OFF
     do_checkIfExist
 fi
@@ -2424,14 +2426,6 @@ if [[ $cyanrip = y ]]; then
         do_checkIfExist
     fi
 
-    # _deps=(libneon.a libxml2.a libjansson.a)
-    # _check=(coverart/CoverArt.h libcoverart{,cc}.{a,pc})
-    # if do_vcs "https://github.com/wiiaboo/libcoverart.git"; then
-    #     do_uninstall "${_check[@]}" include/coverart
-    #     do_cmakeinstall
-    #     do_checkIfExist
-    # fi
-
     _deps=(libmusicbrainz5.a libcurl.a)
     _check=(bin-audio/cyanrip.exe)
     if do_vcs "https://github.com/cyanreg/cyanrip.git"; then
@@ -2460,11 +2454,11 @@ if [[ $cyanrip = y ]]; then
                 --disable-{programs,devices,filters,decoders,hwaccels,encoders,muxers} \
                 --disable-{debug,protocols,demuxers,parsers,doc,swscale,postproc,network} \
                 --disable-{avdevice,autodetect} \
-                --disable-bsfs --enable-protocol=file \
+                --disable-bsfs --enable-protocol=file,data \
                 --enable-encoder=flac,tta,aac,wavpack,alac,pcm_s16le,pcm_s32le \
-                --enable-muxer=flac,tta,ipod,wv,mp3,opus,ogg,wav,pcm_s16le,pcm_s32le \
+                --enable-muxer=flac,tta,ipod,wv,mp3,opus,ogg,wav,pcm_s16le,pcm_s32le,image2,singlejpeg \
                 --enable-parser=png,mjpeg --enable-decoder=mjpeg,png \
-                --enable-demuxer=image2,png_pipe,bmp_pipe \
+                --enable-demuxer=image2,singlejpeg \
                 --enable-{bzlib,zlib,lzma,iconv} \
                 --enable-filter=hdcd \
                 "${cyan_ffmpeg_opts[@]}"
@@ -2636,6 +2630,7 @@ if [[ $vlc == y ]]; then
     _check=(bin/protoc.exe libprotobuf-lite.{,l}a libprotobuf.{,l}a protobuf{,-lite}.pc)
     if do_vcs "https://github.com/protocolbuffers/protobuf.git"; then
         do_uninstall include/google/protobuf "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/protobuf/0001-src-google-protobuf-port_def-use-_WIN32-for-PROTOBUF.patch" am
         do_autogen
         do_separate_confmakeinstall
         do_checkIfExist
@@ -2644,8 +2639,10 @@ if [[ $vlc == y ]]; then
     _check=(pixman-1.pc libpixman-1.a pixman-1/pixman.h)
     if do_vcs "https://gitlab.freedesktop.org/pixman/pixman.git"; then
         do_uninstall include/pixman-1 "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/pixman/0001-pixman-pixman-mmx-fix-redefinition-of-_mm_mulhi_pu16.patch" am
         NOCONFIGURE=y do_autogen
-        do_separate_confmakeinstall
+        CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" \
+            do_separate_confmakeinstall
         do_checkIfExist
     fi
 
