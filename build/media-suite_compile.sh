@@ -56,6 +56,7 @@ while true; do
     --rav1e=* ) rav1e=${1#*=} && shift ;;
     --dav1d=* ) dav1d=${1#*=} && shift ;;
     --libavif=* ) libavif=${1#*=} && shift ;;
+    --jpegxl=* ) jpegxl=${1#*=} && shift ;;
     --vvc=* ) vvc=${1#*=} && shift ;;
     --jq=* ) jq=${1#*=} && shift ;;
     --jo=* ) jo=${1#*=} && shift ;;
@@ -238,7 +239,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
         do_autogen
         do_uninstall include/freetype2 bin-global/freetype-config \
             bin{,-video}/libfreetype-6.dll libfreetype.dll.a "${_check[@]}"
-        extracommands=(--with-{harfbuzz,png,bzip2}"=no")
+        extracommands=(--with-{harfbuzz,png,bzip2,brotli,zlib}"=no")
         [[ $ffmpeg = sharedlibs ]] && extracommands+=(--enable-shared)
         do_separate_confmakeinstall global "${extracommands[@]}"
         [[ $ffmpeg = sharedlibs ]] && do_install "$LOCALDESTDIR"/bin/libfreetype-6.dll bin-video/
@@ -276,11 +277,15 @@ if [[ $mplayer = y || $mpv = y ]] ||
 
     _deps=(libfreetype.a)
     _check=(libharfbuzz.a harfbuzz.pc)
-    if [[ $ffmpeg != sharedlibs ]] && do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
+    [[ $ffmpeg = sharedlibs ]] && _check+=(libharfbuzz.dll.a bin-video/libharfbuzz-{subset-,}0.dll)
+    if do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
         do_pacman_install ragel
-        do_uninstall include/harfbuzz "${_check[@]}"
-        do_mesoninstall -D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}=disabled
+        do_uninstall include/harfbuzz "${_check[@]}" libharfbuzz{-subset,}.la
+        extracommands=(-D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}=disabled)
+        [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
+        do_mesoninstall global "${extracommands[@]}"
         # directwrite shaper doesn't work with mingw headers, maybe too old
+        [[ $ffmpeg = sharedlibs ]] && do_install "$LOCALDESTDIR"/bin-global/libharfbuzz-{subset-,}0.dll bin-video/
         do_checkIfExist
     fi
 
@@ -291,14 +296,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
         do_patch "https://github.com/fribidi/fribidi/pull/151.patch" am
         extracommands=("-Ddocs=false" "-Dtests=false")
         [[ $standalone = n ]] && extracommands+=("-Dbin=false")
-        if [[ $ffmpeg = sharedlibs ]]; then
-            create_build_dir shared
-            log meson meson .. --default-library=shared --bindir=bin-video \
-                --prefix="$LOCALDESTDIR" -Dbin=false "${extracommands[@]}"
-            do_ninja
-            do_ninjainstall
-            cd_safe ..
-        fi
+        [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
         do_mesoninstall video "${extracommands[@]}"
         do_checkIfExist
     fi
@@ -311,13 +309,12 @@ if [[ $mplayer = y || $mpv = y ]] ||
         do_uninstall bin{,-video}/libass-9.dll libass.dll.a include/ass "${_check[@]}"
         extracommands=()
         enabled_any {lib,}fontconfig || extracommands+=(--disable-fontconfig)
-        [[ $ffmpeg = sharedlibs ]] && extracommands+=(--disable-{harfbuzz,fontconfig} --enable-shared)
-        do_separate_confmakeinstall "${extracommands[@]}"
-        [[ $ffmpeg = sharedlibs ]] && do_install "$LOCALDESTDIR"/bin/libass-9.dll bin-video/
+        [[ $ffmpeg = sharedlibs ]] && extracommands+=(--disable-fontconfig --enable-shared)
+        do_separate_confmakeinstall video "${extracommands[@]}"
         do_checkIfExist
     fi
     if [[ $ffmpeg != sharedlibs && $ffmpeg != shared ]]; then
-        _libs=(lib{freetype,fribidi,ass}.dll.a
+        _libs=(lib{freetype,harfbuzz{-subset,},fribidi,ass}.dll.a
             libav{codec,device,filter,format,util,resample}.dll.a
             lib{sw{scale,resample},postproc}.dll.a)
         for _lib in "${_libs[@]}"; do
@@ -1118,6 +1115,25 @@ if [[ $libavif = y ]] && {
     do_checkIfExist
 fi
 
+_check=(bin-global/{{c,d}j,benchmark_}xl.exe)
+if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
+    do_uninstall "${_check[@]}"
+    do_pacman_install lcms2
+    log -q "git.submodule" git submodule update --init --recursive
+    extra_cxxflags=()
+    if [[ ${CC##* } = gcc ]]; then
+        do_simple_print -p "${orange}Warning: JPEG-XL compiled with GCC will not use SIMD optimizations!$reset"
+        extra_cxxflags+=('-DHWY_COMPILE_ONLY_SCALAR')
+    fi
+    CXXFLAGS+=" ${extra_cxxflags[@]}" \
+        do_cmake global -D{BUILD_TESTING,JPEGXL_{ENABLE_OPENEXR,ENABLE_SKCMS}}=OFF \
+        -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC,ENABLE_BENCHMARK}=ON
+    do_ninja
+    do_install tools/{{c,d}j,benchmark_}xl.exe bin-global/
+    do_checkIfExist
+    unset extra_cxxflags
+fi
+
 _check=(libkvazaar.{,l}a kvazaar.pc kvazaar.h)
 [[ $standalone = y ]] && _check+=(bin-video/kvazaar.exe)
 if { [[ $other265 = y ]] || { [[ $ffmpeg != no ]] && enabled libkvazaar; }; } &&
@@ -1361,10 +1377,7 @@ if [[ $ffmpeg != no ]] && enabled_any frei0r ladspa; then
     _check=(libdl.a dlfcn.h)
     if do_vcs "https://github.com/dlfcn-win32/dlfcn-win32.git"; then
         do_uninstall "${_check[@]}"
-        [[ -f config.mak ]] && log clean make distclean
-        sed -i 's|__declspec(dllexport)||g' dlfcn.h
-        do_configure --disable-shared
-        do_make && do_makeinstall
+        do_cmakeinstall
         do_checkIfExist
     fi
 
@@ -1815,6 +1828,7 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     do_uninstall "${_check[@]}"
     do_patch "$_mabs/vulkan-loader/0001-loader-cross-compile-static-linking-hacks.patch" am
     do_patch "$_mabs/vulkan-loader/0002-loader-vulkan.pc.in-use-the-normal-prefix-and-exec_p.patch" am
+    log "git.revert" git revert --no-edit 10c4ebadb9fc41e0abf5a32daa7263c6d1aff575 || git revert --abort
     create_build_dir
     log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
     cd_safe Vulkan-Headers
@@ -2280,7 +2294,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     ! mpv_disabled cplayer && _check+=(bin-video/mpv.{exe,com})
     mpv_enabled libmpv-shared && _check+=(bin-video/mpv-1.dll)
     mpv_enabled libmpv-static && _check+=(libmpv.a)
-    _deps=(lib{ass,avcodec,vapoursynth,shaderc_combined,spirv-cross}.a "$MINGW_PREFIX"/lib/libuchardet.a)
+    _deps=(lib{ass,avcodec,vapoursynth,shaderc_combined,spirv-cross,placebo}.a "$MINGW_PREFIX"/lib/libuchardet.a)
     if do_vcs "https://github.com/mpv-player/mpv.git"; then
         hide_conflicting_libs
         create_ab_pkgconfig
@@ -2412,7 +2426,6 @@ if [[ $cyanrip = y ]]; then
     _check=(neon/ne_utils.h libneon.a neon.pc)
     if do_vcs "https://github.com/notroj/neon.git"; then
         do_uninstall include/neon "${_check[@]}"
-        do_patch "https://github.com/notroj/neon/pull/39.patch" am
         do_autogen
         do_separate_confmakeinstall --disable-{nls,debug,webdav}
         do_checkIfExist
