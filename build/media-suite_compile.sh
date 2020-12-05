@@ -13,7 +13,7 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
-FFMPEG_BASE_OPTS=("--pkg-config-flags=--static" "--cc=$CC" "--cxx=$CXX")
+FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" "--pkg-config-flags=--static" "--cc=$CC" "--cxx=$CXX")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
@@ -1828,7 +1828,9 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     do_uninstall "${_check[@]}"
     do_patch "$_mabs/vulkan-loader/0001-loader-cross-compile-static-linking-hacks.patch" am
     do_patch "$_mabs/vulkan-loader/0002-loader-vulkan.pc.in-use-the-normal-prefix-and-exec_p.patch" am
-    log "git.revert" git revert --no-edit 10c4ebadb9fc41e0abf5a32daa7263c6d1aff575 || git revert --abort
+    grep LIB_SUFFIX loader/vulkan.pc.in &&
+        { log "git.revert" git revert --no-edit 10c4ebadb9fc41e0abf5a32daa7263c6d1aff575 ||
+        git revert --abort; }
     create_build_dir
     log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
     cd_safe Vulkan-Headers
@@ -1914,7 +1916,7 @@ if [[ $ffmpeg != no ]]; then
     enabled libxml2 && do_addOption --extra-cflags=-DLIBXML_STATIC
     enabled ladspa && do_pacman_install ladspa-sdk
     if enabled vapoursynth && pc_exists "vapoursynth-script >= 42"; then
-        _ver=$(pkg-config --modversion vapoursynth-script)
+        _ver=$($PKG_CONFIG --modversion vapoursynth-script)
         do_simple_print "${green}Compiling FFmpeg with Vapoursynth R${_ver}${reset}"
         do_simple_print "${orange}FFmpeg will need vapoursynth.dll and vsscript.dll to run using vapoursynth demuxers"'!'"${reset}"
         unset _ver
@@ -2204,7 +2206,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     fi
 
     if ! mpv_disabled vapoursynth && pc_exists "vapoursynth-script >= 24"; then
-        _ver=$(pkg-config --modversion vapoursynth-script)
+        _ver=$($PKG_CONFIG --modversion vapoursynth-script)
         do_simple_print "${green}Compiling mpv with Vapoursynth R${_ver}${reset}"
         do_simple_print "${orange}mpv will need vapoursynth.dll and vsscript.dll to use vapoursynth filter"'!'"${reset}"
         unset _ver
@@ -2643,7 +2645,7 @@ if [[ $vlc == y ]]; then
     _check=(bin/protoc.exe libprotobuf-lite.{,l}a libprotobuf.{,l}a protobuf{,-lite}.pc)
     if do_vcs "https://github.com/protocolbuffers/protobuf.git"; then
         do_uninstall include/google/protobuf "${_check[@]}"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/protobuf/0001-src-google-protobuf-port_def-use-_WIN32-for-PROTOBUF.patch" am
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/protobuf/0001-io-coded_stream-assume-Windows-is-little-endian.patch" am
         do_autogen
         do_separate_confmakeinstall
         do_checkIfExist

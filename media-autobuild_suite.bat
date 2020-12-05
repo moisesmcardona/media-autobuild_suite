@@ -105,7 +105,7 @@ set msyspackages=asciidoc autoconf automake-wrapper autogen base bison diffstat 
 intltool libtool patch python xmlto make zip unzip git subversion wget p7zip man-db ^
 gperf winpty texinfo gyp-git doxygen autoconf-archive itstool ruby mintty flex
 
-set mingwpackages=cmake dlfcn libpng gcc nasm pcre tools-git yasm ninja pkg-config meson ccache jq ^
+set mingwpackages=cmake dlfcn libpng gcc nasm pcre tools-git yasm ninja pkgconf meson ccache jq ^
 clang
 
 :: built-ins
@@ -1763,7 +1763,7 @@ goto :EOF
     echo.
     echo.DXSDK_DIR="${MINGW_PREFIX}/${MINGW_CHOST}"
     echo.ACLOCAL_PATH="${LOCALDESTDIR}/share/aclocal:${MINGW_PREFIX}/share/aclocal:/usr/share/aclocal"
-    echo.PKG_CONFIG="${MINGW_PREFIX}/bin/pkg-config --static"
+    echo.PKG_CONFIG="${MINGW_PREFIX}/bin/pkgconf --static"
     echo.PKG_CONFIG_PATH="${LOCALDESTDIR}/lib/pkgconfig:${MINGW_PREFIX}/lib/pkgconfig"
     echo.CPPFLAGS="-D_FORTIFY_SOURCE=0 -D__USE_MINGW_ANSI_STDIO=1"
     if %CC%==clang (
