@@ -281,7 +281,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
     if do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
         do_pacman_install ragel
         do_uninstall include/harfbuzz "${_check[@]}" libharfbuzz{-subset,}.la
-        extracommands=(-D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}=disabled)
+        extracommands=(-D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}"=disabled")
         [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
         do_mesoninstall global "${extracommands[@]}"
         # directwrite shaper doesn't work with mingw headers, maybe too old
@@ -619,12 +619,12 @@ if [[ $ffmpeg != no || $sox = y ]]; then
     enabled libmp3lame && do_pacman_install lame
 fi
 
-_check=(ilbc.h libilbc.{{l,}a,pc})
-if [[ $ffmpeg != no ]] && enabled libilbc && do_pkgConfig "libilbc = 2.0.3-dev" &&
+_check=(ilbc.h libilbc.{a,pc})
+if [[ $ffmpeg != no ]] && enabled libilbc &&
     do_vcs "https://github.com/TimothyGu/libilbc.git"; then
-    do_autoreconf
     do_uninstall "${_check[@]}"
-    do_separate_confmakeinstall
+    log -q "git.submodule" git submodule update --init --recursive
+    do_cmakeinstall -DUNIX=OFF
     do_checkIfExist
     add_to_remove
 fi
@@ -1125,7 +1125,7 @@ if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
         do_simple_print -p "${orange}Warning: JPEG-XL compiled with GCC will not use SIMD optimizations!$reset"
         extra_cxxflags+=('-DHWY_COMPILE_ONLY_SCALAR')
     fi
-    CXXFLAGS+=" ${extra_cxxflags[@]}" \
+    CXXFLAGS+=" ${extra_cxxflags[*]}" \
         do_cmake global -D{BUILD_TESTING,JPEGXL_{ENABLE_OPENEXR,ENABLE_SKCMS}}=OFF \
         -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC,ENABLE_BENCHMARK}=ON
     do_ninja
@@ -1585,7 +1585,7 @@ fi
 
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
-if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git"; then
+if [[ ! $x265 = n ]] && do_vcs "https://github.com/videolan/x265.git"; then
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
     [[ $bits = 32bit ]] && assembly=-DENABLE_ASSEMBLY=OFF
     [[ $x265 = d ]] && xpsupport=-DWINXP_SUPPORT=ON
@@ -1828,9 +1828,8 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     do_uninstall "${_check[@]}"
     do_patch "$_mabs/vulkan-loader/0001-loader-cross-compile-static-linking-hacks.patch" am
     do_patch "$_mabs/vulkan-loader/0002-loader-vulkan.pc.in-use-the-normal-prefix-and-exec_p.patch" am
-    grep LIB_SUFFIX loader/vulkan.pc.in &&
-        { log "git.revert" git revert --no-edit 10c4ebadb9fc41e0abf5a32daa7263c6d1aff575 ||
-        git revert --abort; }
+    grep_and_sed VULKAN_LIB_SUFFIX loader/vulkan.pc.in \
+            's/@VULKAN_LIB_SUFFIX@//'
     create_build_dir
     log dependencies /usr/bin/python3 ../scripts/update_deps.py --no-build
     cd_safe Vulkan-Headers
