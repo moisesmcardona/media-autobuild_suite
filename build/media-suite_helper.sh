@@ -11,9 +11,9 @@ if [[ -z ${MSYS+x} ]]; then
     rm -f symlinktest hardlinktest linktest
 fi
 
-if [[ ! $cpuCount =~ ^[0-9]+$ ]]; then
-    cpuCount=$(($(nproc) / 2))
-fi
+case $cpuCount in
+''|*[!0-9]*) cpuCount=$(($(nproc) / 2)) ;;
+esac
 : "${bits:=64bit}"
 curl_opts=(/usr/bin/curl --connect-timeout 15 --retry 3
     --retry-delay 5 --silent --location --insecure --fail)
@@ -1304,7 +1304,7 @@ do_meson() {
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    PKG_CONFIG=pkgconf CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+    PKG_CONFIG="pkgconf --keep-system-libs" CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
         log "meson" meson "$root" --default-library=static --buildtype=release \
         --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}"
     extra_script post meson
@@ -1993,7 +1993,7 @@ done
 [[ -n $PKGCONF_STATIC ]] && static="--static"
 
 run_pkgcfg() {
-    "$MINGW_PREFIX/bin/pkgconf" "$@" || exit 1
+    "$MINGW_PREFIX/bin/pkgconf" --keep-system-libs "$@" || exit 1
 }
 
 deduplicateLibs() {

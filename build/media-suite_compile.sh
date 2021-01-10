@@ -13,7 +13,7 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
-FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" "--pkg-config-flags=--static" "--cc=$CC" "--cxx=$CXX")
+FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --static" "--cc=$CC" "--cxx=$CXX")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
@@ -485,6 +485,10 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
     fi
 fi
 
+file_installed -s libtiff-4.pc &&
+    grep_or_sed '-ldeflate' "$(file_installed libtiff-4.pc)" \
+        's/Libs.private:.*/& -ldeflate/'
+
 _check=(libwebp{,mux}.{{,l}a,pc})
 [[ $standalone = y ]] && _check+=(libwebp{demux,decoder}.{{,l}a,pc}
     bin-global/{{c,d}webp,webpmux,img2webp}.exe)
@@ -559,14 +563,14 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         _check+=(bin-global/tesseract.exe)
         do_uninstall include/tesseract "${_check[@]}"
         sed -i -e 's|Libs.private.*|& -lstdc++|' \
-               -e 's|Requires.private.*|& libarchive iconv|' tesseract.pc.in
+               -e 's|Requires.private.*|& libarchive iconv libtiff-4|' tesseract.pc.in
         case $CC in
         *gcc) sed -i -e 's|Libs.private.*|& -fopenmp -lgomp|' tesseract.pc.in ;;
         *clang) sed -i -e 's|Libs.private.*|& -fopenmp=libomp|' tesseract.pc.in ;;
         esac
         do_separate_confmakeinstall global --disable-{graphics,tessdata-prefix} \
             LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" \
-            LIBS="$($PKG_CONFIG --libs iconv lept)" --datadir="$LOCALDESTDIR/bin-global"
+            LIBS="$($PKG_CONFIG --libs iconv lept libtiff-4)" --datadir="$LOCALDESTDIR/bin-global"
         if [[ ! -f $LOCALDESTDIR/bin-global/tessdata/eng.traineddata ]]; then
             do_pacman_install tesseract-data-eng
             mkdir -p "$LOCALDESTDIR"/bin-global/tessdata
@@ -628,6 +632,8 @@ if [[ $ffmpeg != no ]] && enabled libilbc &&
     do_checkIfExist
     add_to_remove
 fi
+
+grep_or_sed stdc++ "$(file_installed libilbc.pc)" "/Libs:/ a\Libs.private: -lstdc++"
 
 enabled libvorbis && do_pacman_install libvorbis
 enabled libspeex && do_pacman_install speex
@@ -1585,7 +1591,7 @@ fi
 
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
-if [[ ! $x265 = n ]] && do_vcs "https://github.com/videolan/x265.git"; then
+if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git"; then
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
     [[ $bits = 32bit ]] && assembly=-DENABLE_ASSEMBLY=OFF
     [[ $x265 = d ]] && xpsupport=-DWINXP_SUPPORT=ON
@@ -2152,9 +2158,10 @@ if [[ $mplayer = y ]] && check_mplayer_updates; then
     grep_or_sed windows libmpcodecs/ad_spdif.c '/#include "mp_msg.h/ a\#include <windows.h>'
 
     _notrequired=true
-    do_configure --bindir="$LOCALDESTDIR"/bin-video --cc=gcc \
-    --extra-cflags='-DPTW32_STATIC_LIB -O3 -std=gnu99 -DMODPLUG_STATIC' \
-    --extra-libs="-llzma -liconv -lws2_32 -lpthread -lwinpthread -lpng -lwinmm $(enabled vapoursynth && $PKG_CONFIG --libs vapoursynth-script)" \
+    do_configure --bindir="$LOCALDESTDIR"/bin-video \
+    --extra-cflags='-fpermissive -DPTW32_STATIC_LIB -O3 -DMODPLUG_STATIC' \
+    --extra-libs="-llzma -liconv -lws2_32 -lpthread -lwinpthread -lpng -lwinmm $($PKG_CONFIG --libs libilbc) \
+        $(enabled vapoursynth && $PKG_CONFIG --libs vapoursynth-script)" \
     --extra-ldflags='-Wl,--allow-multiple-definition' --enable-{static,runtime-cpudetection} \
     --disable-{gif,cddb} "${faac_opts[@]}" --with-dvdread-config="$PKG_CONFIG dvdread" \
     --with-freetype-config="$PKG_CONFIG freetype2" --with-dvdnav-config="$PKG_CONFIG dvdnav" &&
@@ -2637,7 +2644,7 @@ if [[ $vlc == y ]]; then
         do_uninstall "${_check[@]}"
         log -q "git.submodule" git submodule update --init
         do_autoreconf
-        do_separate_confmakeinstall --disable-examples
+        CFLAGS+=" -include ws2tcpip.h" do_separate_confmakeinstall --disable-examples LIBS="$($PKG_CONFIG --libs openssl)"
         do_checkIfExist
     fi
 
