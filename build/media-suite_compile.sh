@@ -474,7 +474,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
     _deps=(libglut.a)
     _check=(libtiff{.a,-4.pc})
     if do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
-        do_pacman_install libjpeg-turbo xz zlib zstd
+        do_pacman_install libjpeg-turbo xz zlib zstd libdeflate
         do_uninstall "${_check[@]}"
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libtiff/0001-tiffgt-Link-winmm-if-windows.patch" am
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libtiff/0002-CMake-Set-CMP0060-to-NEW-for-glut-libs.patch" am
@@ -791,7 +791,7 @@ fi
 
 _check=(soxr.h libsoxr.a)
 if [[ $ffmpeg != no ]] && enabled libsoxr &&
-    do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/libsoxr.git"; then
+    do_vcs "https://gitlab.com/m-ab-s/libsoxr.git"; then
     do_uninstall "${_check[@]}"
     do_cmakeinstall -D{WITH_LSR_BINDINGS,BUILD_TESTS,WITH_OPENMP}=off
     do_checkIfExist
@@ -964,7 +964,7 @@ _check=(librtmp.{a,pc})
 [[ $rtmpdump = y || $standalone = y ]] && _check+=(bin-video/rtmpdump.exe)
 if { [[ $rtmpdump = y ]] ||
     { [[ $ffmpeg != no ]] && enabled librtmp; }; } &&
-    do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/rtmpdump.git" librtmp; then
+    do_vcs "https://gitlab.com/m-ab-s/rtmpdump.git" librtmp; then
     [[ $rtmpdump = y || $standalone = y ]] && _check+=(bin-video/rtmp{suck,srv,gw}.exe)
     do_uninstall include/librtmp "${_check[@]}"
     [[ -f librtmp/librtmp.a ]] && log "clean" make clean
@@ -1399,7 +1399,7 @@ fi
 
 _check=(DeckLinkAPI.h DeckLinkAPIVersion.h DeckLinkAPI_i.c)
 if [[ $ffmpeg != no ]] && enabled decklink &&
-    do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/decklink-headers.git"; then
+    do_vcs "https://gitlab.com/m-ab-s/decklink-headers.git"; then
     do_makeinstall PREFIX="$LOCALDESTDIR"
     do_checkIfExist
 fi
@@ -2398,7 +2398,7 @@ if [[ $bmx = y ]]; then
     do_pacman_install uriparser
 
     _check=(bin-video/MXFDump.exe libMXF-1.0.{{,l}a,pc})
-    if do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/libmxf.git" libMXF-1.0; then
+    if do_vcs "https://gitlab.com/m-ab-s/libmxf.git" libMXF-1.0; then
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libmxf/0001-Add-spaces-between-quotes-and-literal.patch" am
         do_autogen
         do_uninstall include/libMXF-1.0 "${_check[@]}"
@@ -2408,7 +2408,7 @@ if [[ $bmx = y ]]; then
 
     _check=(libMXF++-1.0.{{,l}a,pc})
     _deps=(libMXF-1.0.a)
-    if do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/libmxfpp.git" libMXF++-1.0; then
+    if do_vcs "https://gitlab.com/m-ab-s/libmxfpp.git" libMXF++-1.0; then
         do_autogen
         do_uninstall include/libMXF++-1.0 "${_check[@]}"
         do_separate_confmakeinstall video --disable-examples
@@ -2417,7 +2417,7 @@ if [[ $bmx = y ]]; then
 
     _check=(bin-video/{bmxtranswrap,{h264,mov,vc2}dump,mxf2raw,raw2bmx}.exe)
     _deps=("$MINGW_PREFIX"/lib/liburiparser.a lib{MXF{,++}-1.0,curl}.a)
-    if do_vcs "https://gitlab.com/media-autobuild_suite-dependencies/bmx.git"; then
+    if do_vcs "https://gitlab.com/m-ab-s/bmx.git"; then
         do_autogen
         do_uninstall libbmx-0.1.{{,l}a,pc} bin-video/bmxparse.exe \
             include/bmx-0.1 "${_check[@]}"
@@ -2540,7 +2540,6 @@ if [[ $vlc == y ]]; then
     _check=(bin/qmake.exe Qt5Core.pc Qt5Gui.pc Qt5Widgets.pc)
     if do_vcs "https://github.com/qt/qtbase.git#branch=${_qt_version:=5.14}"; then
         do_uninstall include/QtCore share/mkspecs "${_check[@]}"
-        vcs_clean "$PWD" git
         # Enable ccache on !unix and use cygpath to fix certain issues
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/qtbase/0001-qtbase-mabs.patch" am
         grep_and_sed " create_libtool" mkspecs/features/qt_module.prf \
@@ -2585,7 +2584,6 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc)
     _check=(Qt5Quick.pc Qt5Qml.pc)
     if do_vcs "https://github.com/qt/qtdeclarative.git#branch=$_qt_version"; then
-        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2599,7 +2597,6 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc)
     _check=(Qt5Svg.pc)
     if do_vcs "https://github.com/qt/qtsvg.git#branch=$_qt_version"; then
-        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2611,7 +2608,6 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc Qt5Quick.pc Qt5Qml.pc)
     _check=("$LOCALDESTDIR/qml/QtGraphicalEffects/libqtgraphicaleffectsplugin.a")
     if do_vcs "https://github.com/qt/qtgraphicaleffects.git#branch=$_qt_version"; then
-        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
@@ -2623,7 +2619,6 @@ if [[ $vlc == y ]]; then
     _deps=(Qt5Core.pc Qt5Quick.pc Qt5Qml.pc)
     _check=(Qt5QuickControls2.pc)
     if do_vcs "https://github.com/qt/qtquickcontrols2.git#branch=$_qt_version"; then
-        vcs_clean "$PWD" git
         do_uninstall "${_check[@]}"
         do_qmake
         do_makeinstall
