@@ -13,7 +13,7 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
-FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --static" "--cc=$CC" "--cxx=$CXX")
+FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
@@ -381,11 +381,10 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
         do_wget -h e1cb1db3d2e249a6a3eb6f0946777c2e892d5c5dc7bd91c74394fc3a01cab8b5 \
         "https://ftp.gnu.org/gnu/libidn/libidn2-2.3.0.tar.gz"; then
         do_uninstall "${_check[@]}"
-        [[ $standalone == y ]] || sed -ri 's|(bin_PROGRAMS = ).*|\1|g' src/Makefile.am
+        [[ $standalone == y ]] || sed -ri 's|(bin_PROGRAMS = ).*|\1|g' src/Makefile.in
         # unistring also depends on iconv
         grep_or_sed '@LTLIBUNISTRING@ @LTLIBICONV@' libidn2.pc.in \
             's|(@LTLIBICONV@) (@LTLIBUNISTRING@)|\2 \1|'
-        do_autoreconf
         do_separate_confmakeinstall global --disable-{doc,rpath,nls}
         do_checkIfExist
     fi
@@ -396,9 +395,8 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
         do_wget -h 41bd1c75a375b85c337b59783f5deb93dbb443fb0a52d257f403df7bd653ee12 \
         "https://github.com/rockdaboot/libpsl/releases/download/libpsl-0.21.0/libpsl-0.21.0.tar.gz"; then
         do_uninstall "${_check[@]}"
-        [[ $standalone == y ]] || sed -ri 's|(bin_PROGRAMS = ).*|\1|g' tools/Makefile.am
+        [[ $standalone == y ]] || sed -ri 's|(bin_PROGRAMS = ).*|\1|g' tools/Makefile.in
         grep_or_sed "Requires.private" libpsl.pc.in "/Libs:/ i\Requires.private: libidn2"
-        do_autoreconf
         CFLAGS+=" -DPSL_STATIC" do_separate_confmakeinstall global --disable-{nls,rpath,gtk-doc-html,man,runtime}
         do_checkIfExist
     fi
@@ -445,7 +443,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]] &&
         log autogen ./buildconf
     [[ $curl = openssl ]] && hide_libressl
     hide_conflicting_libs
-    CPPFLAGS+=" -DNGHTTP2_STATICLIB -DPSL_STATIC" \
+    CPPFLAGS+=" -DGNUTLS_INTERNAL_BUILD -DNGHTTP2_STATICLIB -DPSL_STATIC" \
         do_separate_confmakeinstall global "${extra_opts[@]}" \
         --without-{libssh2,random,ca-bundle,ca-path,librtmp} \
         --with-brotli --enable-sspi --disable-debug
@@ -476,8 +474,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
     if do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
         do_pacman_install libjpeg-turbo xz zlib zstd libdeflate
         do_uninstall "${_check[@]}"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libtiff/0001-tiffgt-Link-winmm-if-windows.patch" am
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libtiff/0002-CMake-Set-CMP0060-to-NEW-for-glut-libs.patch" am
+        do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/233.patch" am
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
             '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd'
         CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX}=OFF
@@ -557,7 +554,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         # Don't include curl in tesseract. We aren't mainly using the executable with links.
         # tesseract doesn't have a --disable-curl option or something so it's dumb.
         for _curl_pc in {"$MINGW_PREFIX","$LOCALDESTDIR"}/lib/pkgconfig/libcurl.pc; do
-            [[ -f $_curl_pc ]] && mv "$_curl_pc"{,.bak}
+            [[ -f $_curl_pc.bak ]] && mv "$_curl_pc"{.bak,}
         done
         do_autogen
         _check+=(bin-global/tesseract.exe)
@@ -569,6 +566,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         *clang) sed -i -e 's|Libs.private.*|& -fopenmp=libomp|' tesseract.pc.in ;;
         esac
         do_separate_confmakeinstall global --disable-{graphics,tessdata-prefix} \
+            --without-curl \
             LIBLEPT_HEADERSDIR="$LOCALDESTDIR/include" \
             LIBS="$($PKG_CONFIG --libs iconv lept libtiff-4)" --datadir="$LOCALDESTDIR/bin-global"
         if [[ ! -f $LOCALDESTDIR/bin-global/tessdata/eng.traineddata ]]; then
@@ -581,9 +579,6 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
                 "Just download <lang you want>.traineddata and copy it to this directory." \
                 > "$LOCALDESTDIR"/bin-global/tessdata/need_more_languages.txt
         fi
-        for _curl_pc in {"$MINGW_PREFIX","$LOCALDESTDIR"}/lib/pkgconfig/libcurl.pc; do
-            [[ -f $_curl_pc.bak ]] && mv "$_curl_pc"{.bak,}
-        done
         do_checkIfExist
     fi
     do_addOption --extra-cflags=-fopenmp --extra-libs=-lgomp
@@ -1015,7 +1010,8 @@ if [[ $ffmpeg != no ]] && enabled libvmaf &&
     do_vcs "https://github.com/Netflix/vmaf.git"; then
     do_uninstall share/model "${_check[@]}"
     cd_safe libvmaf
-    CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" do_mesoninstall video
+    CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" do_mesoninstall video \
+        -Denable_float=true
     do_checkIfExist
 fi
 file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
@@ -1121,7 +1117,7 @@ if [[ $libavif = y ]] && {
     do_checkIfExist
 fi
 
-_check=(bin-global/{{c,d}j,benchmark_}xl.exe)
+_check=(bin-global/{c,d}jxl.exe)
 if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
     do_uninstall "${_check[@]}"
     do_pacman_install lcms2
@@ -1132,10 +1128,10 @@ if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
         extra_cxxflags+=('-DHWY_COMPILE_ONLY_SCALAR')
     fi
     CXXFLAGS+=" ${extra_cxxflags[*]}" \
-        do_cmake global -D{BUILD_TESTING,JPEGXL_{ENABLE_OPENEXR,ENABLE_SKCMS}}=OFF \
-        -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC,ENABLE_BENCHMARK}=ON
+        do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{OPENEXR,SKCMS,BENCHMARK}}=OFF \
+        -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC}=ON
     do_ninja
-    do_install tools/{{c,d}j,benchmark_}xl.exe bin-global/
+    do_install tools/{c,d}jxl.exe bin-global/
     do_checkIfExist
     unset extra_cxxflags
 fi
@@ -1157,9 +1153,9 @@ _check=(libSDL2{,_test,main}.a sdl2.pc SDL2/SDL.h)
 if { { [[ $ffmpeg != no ]] &&
     { enabled sdl2 || ! disabled_any sdl2 autodetect; }; } ||
     mpv_enabled sdl2; } &&
-    do_pkgConfig "sdl2 = 2.0.12" &&
-    do_wget -h 349268f695c02efbc9b9148a70b85e58cefbbf704abd3e91be654db7f1e2c863 \
-        "http://www.libsdl.org/release/SDL2-2.0.12.tar.gz"; then
+    do_pkgConfig "sdl2 = 2.0.14" &&
+    do_wget -h f85233bc8d4f30a7caa5aea7de0f95b8f4b1f7272473aea4b3ec4ede0a27357f \
+        "https://github.com/libsdl-org/SDL/archive/release-2.0.14.tar.gz"; then
     do_uninstall include/SDL2 lib/cmake/SDL2 bin/sdl2-config "${_check[@]}"
     sed -i 's|__declspec(dllexport)||g' include/{begin_code,SDL_opengl}.h
     do_separate_confmakeinstall
@@ -1788,8 +1784,7 @@ if [[ $ffmpeg != no ]] && enabled liblensfun &&
     grep_or_sed liconv "$MINGW_PREFIX/lib/pkgconfig/glib-2.0.pc" 's;-lintl;& -liconv;g'
     grep_or_sed Libs.private libs/lensfun/lensfun.pc.cmake '/Libs:/ a\Libs.private: -lstdc++'
     do_uninstall "bin-video/lensfun" "${_check[@]}"
-    do_patch "https://github.com/Alexpux/MINGW-packages/raw/master/mingw-w64-lensfun/cmake-mingw.patch"
-    do_patch "https://github.com/Alexpux/MINGW-packages/raw/master/mingw-w64-lensfun/lenstool.patch"
+    do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/0ab14ea53ad1cf6f7eaca631ea07c99e2dbd4228/mingw-w64-lensfun/cmake-mingw.patch"
     CFLAGS+=" -DGLIB_STATIC_COMPILATION" CXXFLAGS+=" -DGLIB_STATIC_COMPILATION" \
         do_cmakeinstall -DBUILD_STATIC=on -DBUILD_{TESTS,LENSTOOL,DOC}=off \
         -DINSTALL_HELPER_SCRIPTS=off -DCMAKE_INSTALL_DATAROOTDIR="$LOCALDESTDIR/bin-video"
@@ -1963,8 +1958,10 @@ if [[ $ffmpeg != no ]]; then
         enabled libsvtav1 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtav1"
         enabled libsvtvp9 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtvp9"
 
-        enabled vapoursynth &&
+        enabled vapoursynth && {
             do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-Add-Alternative-VapourSynth-demuxer.patch" am
+            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0002-vapoursynth_alt-use-atomic_int-for-async_pending.patch" am
+        }
 
         if enabled openal &&
             pc_exists "openal"; then
@@ -2324,7 +2321,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
 
         enabled libvidstab && {
             mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_cflags < <($PKG_CONFIG --libs vidstab)
-            mapfile -d ' ' -t -O "${#mpv_cflags[@]}" mpv_ldflags < <($PKG_CONFIG --libs vidstab)
+            mapfile -d ' ' -t -O "${#mpv_ldflags[@]}" mpv_ldflags < <($PKG_CONFIG --libs vidstab)
         }
         enabled_any libssh libxavs2 && mpv_ldflags+=("-Wl,--allow-multiple-definition")
         if ! mpv_disabled manpage-build || mpv_enabled html-build; then
@@ -2646,7 +2643,6 @@ if [[ $vlc == y ]]; then
     _check=(bin/protoc.exe libprotobuf-lite.{,l}a libprotobuf.{,l}a protobuf{,-lite}.pc)
     if do_vcs "https://github.com/protocolbuffers/protobuf.git"; then
         do_uninstall include/google/protobuf "${_check[@]}"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/protobuf/0001-io-coded_stream-assume-Windows-is-little-endian.patch" am
         do_autogen
         do_separate_confmakeinstall
         do_checkIfExist
