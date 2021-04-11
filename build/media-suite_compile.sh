@@ -1120,6 +1120,7 @@ fi
 _check=(bin-global/{c,d}jxl.exe)
 if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
     do_uninstall "${_check[@]}"
+    do_pacman_remove asciidoc-py3-git
     do_pacman_install lcms2 asciidoc
     log -q "git.submodule" git submodule update --init --recursive
     extra_cxxflags=()
@@ -1904,7 +1905,7 @@ if [[ $ffmpeg != no ]]; then
         fi
     fi
     enabled chromaprint && do_addOption --extra-cflags=-DCHROMAPRINT_NODLL --extra-libs=-lstdc++ &&
-        do_pacman_remove fftw && do_pacman_install chromaprint
+        { do_pacman_remove fftw; do_pacman_install chromaprint; }
     if enabled libzmq; then
         do_pacman_install zeromq
         grep_or_sed ws2_32 "$MINGW_PREFIX"/lib/pkgconfig/libzmq.pc \
@@ -2290,7 +2291,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         do_vcs "https://code.videolan.org/videolan/libplacebo.git"; then
         do_pacman_install python-mako
         do_uninstall "${_check[@]}"
-        do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml"
+        do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false
         do_checkIfExist
     fi
 
