@@ -235,7 +235,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
 
     _check=(libfreetype.{l,}a freetype2.pc)
     [[ $ffmpeg = sharedlibs ]] && _check+=(bin-video/libfreetype-6.dll libfreetype.dll.a)
-    if do_vcs "https://git.savannah.gnu.org/git/freetype/freetype2.git#tag=LATEST"; then
+    if do_vcs "https://gitlab.freedesktop.org/freetype/freetype.git#tag=LATEST"; then
         do_autogen
         do_uninstall include/freetype2 bin-global/freetype-config \
             bin{,-video}/libfreetype-6.dll libfreetype.dll.a "${_check[@]}"
@@ -1714,7 +1714,7 @@ fi
 
 
 if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
-    _python_ver=3.8.5
+    _python_ver=3.8.9
     _python_lib=python38
     [[ $bits = 32bit ]] && _arch=win32 || _arch=amd64
     _check=("lib$_python_lib.a")
@@ -1727,7 +1727,7 @@ if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
         do_checkIfExist
     fi
 
-    _vsver=52
+    _vsver=53
     _check=(lib{vapoursynth,vsscript}.a vapoursynth{,-script}.pc vapoursynth/{VS{Helper,Script},VapourSynth}.h)
     if pc_exists "vapoursynth = $_vsver" && files_exist "${_check[@]}"; then
         do_print_status "vapoursynth R$_vsver" "$green" "Up-to-date"
@@ -2658,11 +2658,10 @@ if [[ $vlc == y ]]; then
         do_checkIfExist
     fi
 
-    _check=(libmedialibrary.{,l}a medialibrary.pc medialibrary/IAlbum.h)
+    _check=(libmedialibrary.a medialibrary.pc medialibrary/IAlbum.h)
     if do_vcs "https://code.videolan.org/videolan/medialibrary.git"; then
         do_uninstall include/medialibrary "${_check[@]}"
-        do_autoreconf
-        do_separate_confmakeinstall --disable-tests --without-libvlc
+        do_mesoninstall -Dtests=disabled -Dlibvlc=disabled
         do_checkIfExist
     fi
 
