@@ -293,7 +293,6 @@ if [[ $mplayer = y || $mpv = y ]] ||
     [[ $standalone = y ]] && _check+=(bin-video/fribidi.exe)
     [[ $ffmpeg = sharedlibs ]] && _check+=(bin-video/libfribidi-0.dll libfribidi.dll.a)
     if do_vcs "https://github.com/fribidi/fribidi.git#tag=LATEST"; then
-        do_patch "https://github.com/fribidi/fribidi/pull/151.patch" am
         extracommands=("-Ddocs=false" "-Dtests=false")
         [[ $standalone = n ]] && extracommands+=("-Dbin=false")
         [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
@@ -1130,7 +1129,7 @@ if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
     fi
     CXXFLAGS+=" ${extra_cxxflags[*]}" \
         do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{OPENEXR,SKCMS,BENCHMARK}}=OFF \
-        -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC}=ON
+        -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC}=ON -DJPEGXL_ENABLE_MANPAGES=OFF
     do_ninja
     do_install tools/{c,d}jxl.exe bin-global/
     do_checkIfExist
