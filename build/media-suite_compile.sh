@@ -2510,13 +2510,27 @@ if [[ $vlc == y ]]; then
     # Remove useless shell scripts file that causes errors when stdout is not a tty.
     find "$MINGW_PREFIX/bin/" -name "luac" -delete
 
+    _check=("$DXSDK_DIR/fxc2.exe" "$DXSDK_DIR/d3dcompiler_47.dll")
+    if do_vcs "https://github.com/mozilla/fxc2.git"; then
+        do_uninstall "${_check[@]}"
+        do_patch "https://code.videolan.org/videolan/vlc/-/raw/master/contrib/src/fxc2/0001-make-Vn-argument-as-optional-and-provide-default-var.patch" am
+        do_patch "https://code.videolan.org/videolan/vlc/-/raw/master/contrib/src/fxc2/0002-accept-windows-style-flags-and-splitted-argument-val.patch" am
+        do_patch "https://code.videolan.org/videolan/vlc/-/raw/master/contrib/src/fxc2/0004-Revert-Fix-narrowing-conversion-from-int-to-BYTE.patch" am
+        $CXX $CFLAGS -static -static-libgcc -static-libstdc++ -o "$DXSDK_DIR/fxc2.exe" fxc2.cpp -ld3dcompiler $LDFLAGS
+        case $bits in
+        32*) cp -f "dll/d3dcompiler_47_32.dll" "$DXSDK_DIR/d3dcompiler_47.dll" ;;
+        *) cp -f "dll/d3dcompiler_47.dll" "$DXSDK_DIR/d3dcompiler_47.dll" ;;
+        esac
+        do_checkIfExist
+    fi
+
     # Taken from https://code.videolan.org/videolan/vlc/blob/master/contrib/src/qt/AddStaticLink.sh
     _add_static_link() {
         local PRL_SOURCE=$LOCALDESTDIR/$2/lib$3.prl LIBS
         [[ -f $PRL_SOURCE ]] || PRL_SOURCE=$LOCALDESTDIR/$2/$3.prl
         [[ ! -f $PRL_SOURCE ]] && return 1
         LIBS=$(sed -e "
-            /QMAKE_PRL_LIBS/ {
+            /QMAKE_PRL_LIBS =/ {
                 s@QMAKE_PRL_LIBS =@@
                 s@$LOCALDESTDIR/lib@\${libdir}@g
                 s@\$\$\[QT_INSTALL_LIBS\]@\${libdir}@g
@@ -2529,18 +2543,27 @@ if [[ $vlc == y ]]; then
             " "$LOCALDESTDIR/lib/pkgconfig/$1.pc"
     }
 
-    _qt_version=5.14 # Version that vlc uses it seems. + 2 since it seems something's broken in it
+    _qt_version=5.15 # Version that vlc uses
     # $PKG_CONFIG --exists Qt5{Core,Widgets,Gui,Quick{,Widgets,Controls2},Svg}
 
     # Qt compilation takes ages.
     export QMAKE_CXX=$CXX QMAKE_CC=$CC
+    export MSYS2_ARG_CONV_EXCL="--foreign-types="
     _check=(bin/qmake.exe Qt5Core.pc Qt5Gui.pc Qt5Widgets.pc)
-    if do_vcs "https://github.com/qt/qtbase.git#branch=${_qt_version:=5.14}"; then
+    if do_vcs "https://github.com/qt/qtbase.git#branch=${_qt_version:=5.15}"; then
         do_uninstall include/QtCore share/mkspecs "${_check[@]}"
         # Enable ccache on !unix and use cygpath to fix certain issues
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/qtbase/0001-qtbase-mabs.patch" am
-        grep_and_sed " create_libtool" mkspecs/features/qt_module.prf \
-            "s/ create_libtool/ -create_libtool/g"
+        do_patch "https://code.videolan.org/videolan/vlc/-/raw/master/contrib/src/qt/0003-allow-cross-compilation-of-angle-with-wine.patch" am
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/qtbase/0003-Remove-wine-prefix-before-fxc2.patch" am
+        do_patch "https://code.videolan.org/videolan/vlc/-/raw/master/contrib/src/qt/0006-ANGLE-don-t-use-msvc-intrinsics-when-crosscompiling-.patch" am
+        do_patch "https://code.videolan.org/videolan/vlc/-/raw/master/contrib/src/qt/0009-Add-KHRONOS_STATIC-to-allow-static-linking-on-Windows.patch" am
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/qtbase/0006-qt_module.prf-don-t-create-libtool-if-not-unix.patch" am
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/qtbase/0007-qmake-Patch-win32-g-for-static-builds.patch" am
+        cp -f src/3rdparty/angle/src/libANGLE/{,libANGLE}Debug.cpp
+        grep_and_sed "src/libANGLE/Debug.cpp" src/angle/src/common/gles_common.pri \
+            "s#src/libANGLE/Debug.cpp#src/libANGLE/libANGLEDebug.cpp#g"
+
         QT5Base_config=(
             -prefix "$LOCALDESTDIR"
             -datadir "$LOCALDESTDIR"
@@ -2549,11 +2572,17 @@ if [[ $vlc == y ]]; then
             -confirm-license
             -release
             -static
-            -platform win32-g++
+            -platform "$(
+                case $CC in
+                *clang) echo win32-clang-g++ ;;
+                *) echo win32-g++ ;;
+                esac
+            )"
             -make-tool make
-            -opengl desktop
-            -qt-{libjpeg,freetype}
-            -no-{fontconfig,pkg-config,sql-sqlite,gif,openssl,dbus,vulkan,sql-odbc,pch,compile-examples,glib}
+            -qt-{libjpeg,freetype,zlib}
+            -angle
+            -no-{shared,fontconfig,pkg-config,sql-sqlite,gif,openssl,dbus,vulkan,sql-odbc,pch,compile-examples,glib,direct2d,feature-testlib}
+            -skip qtsql
             -nomake examples
             -nomake tests
         )
@@ -2575,6 +2604,10 @@ if [[ $vlc == y ]]; then
             "s;Cflags:.*;& -I\${includedir}/QtGui/$(qmake -query QT_VERSION)/QtGui;"
         _add_static_link Qt5Gui plugins/platforms qwindows
         _add_static_link Qt5Widgets plugins/styles qwindowsvistastyle
+
+        cat >> "$LOCALDESTDIR/mkspecs/win32-g++/qmake.conf" <<'EOF'
+CONFIG += static
+EOF
         do_checkIfExist
     fi
 
@@ -2582,6 +2615,9 @@ if [[ $vlc == y ]]; then
     _check=(Qt5Quick.pc Qt5Qml.pc)
     if do_vcs "https://github.com/qt/qtdeclarative.git#branch=$_qt_version"; then
         do_uninstall "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/qtdeclarative/0001-features-hlsl_bytecode_header.prf-Use-DXSDK_DIR-for-.patch" am
+        git cherry-pick 0b9fcb829313d0eaf2b496bf3ad44e5628fa43b2 > /dev/null 2>&1 ||
+            git cherry-pick --abort
         do_qmake
         do_makeinstall
         _add_static_link Qt5Quick qml/QtQuick.2 qtquick2plugin
@@ -2693,13 +2729,18 @@ if [[ $vlc == y ]]; then
             "$LOCALDESTDIR"/vlc/include/vlc/libvlc_version.h)
     if do_vcs "https://code.videolan.org/videolan/vlc.git"; then
         do_uninstall bin/plugins lib/vlc "${_check[@]}"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/vlc/0001-srt-Replace-SRTO_TSBPDDELAY-with-SRTO_LATENCY.patch" am
-        # https://code.videolan.org/videolan/medialibrary/issues/220
-        # msys2's patches
-        # Issues due to conflicting `vlc_module_name` between libvlc and libvlccore when linking vlc-static.exe and undefines.
-        # having gpg-error after GCRYPT_LIBS causes some issues, and since it's already included in GCRYPT_LIBS
-        do_patch "https://gist.githubusercontent.com/moisespr123/2369978dc603ed1e67bdf7aba7304416/raw/vlc-corrected-patch" am
-        do_patch "https://gist.githubusercontent.com/moisespr123/70e16f70f5d016c3d0f0dacbf97526f0/raw/medialib-patch"
+        _mabs_vlc=https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/vlc
+        do_patch "https://code.videolan.org/videolan/vlc/-/merge_requests/155.patch" am
+        do_patch "$_mabs_vlc/0001-modules-access-srt-Use-srt_create_socket-instead-of-.patch" am
+        do_patch "$_mabs_vlc/0002-modules-codec-libass-Use-ass_set_pixel_aspect-instea.patch" am
+        do_patch "$_mabs_vlc/0003-Use-libdir-for-plugins-on-msys2.patch" am
+        do_patch "$_mabs_vlc/0004-include-vlc_fixups.h-fix-iovec-is-redefined-errors.patch" am
+        do_patch "$_mabs_vlc/0005-include-vlc_common.h-fix-snprintf-and-vsnprintf-rede.patch" am
+        do_patch "$_mabs_vlc/0006-configure.ac-check-if-_WIN32_IE-is-already-defined.patch" am
+        do_patch "$_mabs_vlc/0007-modules-stream_out-rtp-don-t-redefine-E-defines.patch" am
+        do_patch "$_mabs_vlc/0008-include-vlc_codecs.h-don-t-redefine-WAVE_FORMAT_PCM.patch" am
+        do_patch "$_mabs_vlc/0009-modules-audio_filter-channel_mixer-spatialaudio-add-.patch" am
+        do_patch "$_mabs_vlc/0010-modules-access_output-don-t-put-lgpg-error-for-liveh.patch" am
 
         do_autoreconf
         # All of the disabled are because of multiple issues both on the installed libs and on vlc's side.
