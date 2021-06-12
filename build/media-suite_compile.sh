@@ -490,17 +490,32 @@ _check=(libwebp{,mux}.{a,pc})
     bin-global/{{c,d}webp,webpmux,img2webp}.exe)
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_vcs "https://chromium.googlesource.com/webm/libwebp"; then
+    cd "$MINGW_PREFIX/share/cmake-3.20" && {
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0001-FindPkgConfig-split-args-if-loaded-from-environment.patch"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0002-FindTIFF-Use-pkg-config-for-finding-dependencies.patch"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0003-FindGLUT-Use-pkg-config-for-finding-dependencies.patch"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0004-FindZLIB-Use-pkg-config-for-finding-dependencies.patch"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0005-FindPNG-Use-pkg-config-for-finding-dependencies.patch"
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0006-FindJPEG-Use-pkg-config-for-finding-dependencies.patch"
+        cd - > /dev/null 2>&1 || true
+    } > /dev/null 2>&1
     do_pacman_install giflib
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-vwebp-Use-GLUT-and-opengl-import-targets.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-vwebp-link-winmm-if-windows.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-deps-link-libtiff-first.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-include-src-along-with-binary_dir-src.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-CMake-set-CMP0072-to-NEW.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-build-libwebpmux-for-2-additional-flags.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-target_include_directories-instead-of-incl.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-CMake-use-import-libraries-if-possible-for-vwebp.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-use-import-library-for-SDL-if-available.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-include-src-along-with-binary_dir-src.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
     do_uninstall include/webp bin-global/gif2webp.exe "${_check[@]}"
     extracommands=("-DWEBP_BUILD_EXTRAS=OFF")
     if [[ $standalone = y ]]; then
-        extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2,V}WEBP,ANIM_UTILS}"=ON")
+        extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2,V}WEBP,ANIM_UTILS,WEBPMUX}"=ON")
     else
-        extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2,V}WEBP,ANIM_UTILS}"=OFF")
+        extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2,V}WEBP,ANIM_UTILS,WEBPMUX}"=OFF")
     fi
     CFLAGS+=" -DFREEGLUT_STATIC" \
         do_cmakeinstall global -DWEBP_ENABLE_SWAP_16BIT_CSP=ON "${extracommands[@]}"
@@ -553,11 +568,6 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
     _check=(libtesseract.{,l}a tesseract.pc)
     if do_vcs "https://github.com/tesseract-ocr/tesseract.git"; then
         do_pacman_install docbook-xsl libarchive pango asciidoc
-        # Don't include curl in tesseract. We aren't mainly using the executable with links.
-        # tesseract doesn't have a --disable-curl option or something so it's dumb.
-        for _curl_pc in {"$MINGW_PREFIX","$LOCALDESTDIR"}/lib/pkgconfig/libcurl.pc; do
-            [[ -f $_curl_pc.bak ]] && mv "$_curl_pc"{.bak,}
-        done
         do_autogen
         _check+=(bin-global/tesseract.exe)
         do_uninstall include/tesseract "${_check[@]}"
@@ -583,7 +593,6 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         fi
         do_checkIfExist
     fi
-    do_addOption --extra-cflags=-fopenmp --extra-libs=-lgomp
 fi
 
 _check=(librubberband.a rubberband.pc rubberband/{rubberband-c,RubberBandStretcher}.h)
@@ -1427,7 +1436,7 @@ if [[ $mp4box = y ]] && do_vcs "https://github.com/gpac/gpac.git"; then
     do_uninstall include/gpac "${_check[@]}"
     git grep -PIl "\xC2\xA0" | xargs -r sed -i 's/\xC2\xA0/ /g'
     LDFLAGS+=" -L$LOCALDESTDIR/lib -L$MINGW_PREFIX/lib" \
-        do_separate_conf --static-mp4box
+        do_separate_conf --static-bin --static-build --static-modules --enable-all
     do_make
     log "install" make install-lib
     do_install bin/gcc/MP4Box.exe bin/gcc/gpac.exe bin-video/
