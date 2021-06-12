@@ -490,9 +490,11 @@ _check=(libwebp{,mux}.{a,pc})
     bin-global/{{c,d}webp,webpmux,img2webp}.exe)
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_vcs "https://chromium.googlesource.com/webm/libwebp"; then
+    do_pacman_install giflib
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-vwebp-Use-GLUT-and-opengl-import-targets.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-vwebp-link-winmm-if-windows.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-deps-link-libtiff-first.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-include-src-along-with-binary_dir-src.patch" am
     do_uninstall include/webp bin-global/gif2webp.exe "${_check[@]}"
     extracommands=("-DWEBP_BUILD_EXTRAS=OFF")
     if [[ $standalone = y ]]; then
@@ -1348,6 +1350,7 @@ fi
 _check=(libvidstab.a vidstab.pc)
 if [[ $ffmpeg != no ]] && enabled libvidstab &&
     do_vcs "https://github.com/georgmartius/vid.stab.git" vidstab; then
+    do_patch "https://github.com/georgmartius/vid.stab/pull/108.patch" am
     do_pacman_install openmp
     do_uninstall include/vid.stab "${_check[@]}"
     do_cmakeinstall
@@ -1419,7 +1422,7 @@ if [[ $ffmpeg != no ]] && { enabled amf || ! disabled_any autodetect amf; } &&
     do_checkIfExist
 fi
 
-_check=(libgpac_static.a bin-video/MP4Box.exe)
+_check=(libgpac_static.a bin-video/{MP4Box,gpac}.exe)
 if [[ $mp4box = y ]] && do_vcs "https://github.com/gpac/gpac.git"; then
     do_uninstall include/gpac "${_check[@]}"
     git grep -PIl "\xC2\xA0" | xargs -r sed -i 's/\xC2\xA0/ /g'
@@ -1427,7 +1430,7 @@ if [[ $mp4box = y ]] && do_vcs "https://github.com/gpac/gpac.git"; then
         do_separate_conf --static-mp4box
     do_make
     log "install" make install-lib
-    do_install bin/gcc/MP4Box.exe bin-video/
+    do_install bin/gcc/MP4Box.exe bin/gcc/gpac.exe bin-video/
     do_checkIfExist
 fi
 
@@ -1712,6 +1715,15 @@ if enabled libsrt && do_vcs "https://github.com/Haivision/srt.git"; then
     do_checkIfExist
 fi
 
+_check=(librist.{a,pc} librist/librist.h bin-global/rist{sender,receiver,2rist,srppasswd}.exe)
+if enabled librist && do_vcs "https://code.videolan.org/rist/librist.git"; then
+    do_patch "https://code.videolan.org/1480c1/librist/-/commit/67d4aafc2f580f354846f3e866b350a190539f9b.patch" am
+    do_uninstall include/librist "${_check[@]}"
+    extracommands=()
+    [[ $standalone = y ]] || extracommands+=("-Dbuilt_tools=false")
+    do_mesoninstall global -Dhave_mingw_pthreads=true -Dtest=false "${extracommands[@]}"
+    do_checkIfExist
+fi
 
 if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
     _python_ver=3.8.9
