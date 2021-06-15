@@ -13,7 +13,7 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
-FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX")
+FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --keep-system-cflags --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
@@ -143,6 +143,7 @@ do_hide_all_sharedlibs
 create_ab_pkgconfig
 create_cmake_toolchain
 create_ab_ccache
+pacman -S --noconfirm "$MINGW_PACKAGE_PREFIX-cmake" > /dev/null 2>&1
 
 set_title "compiling global tools"
 do_simple_print -p '\n\t'"${orange}Starting $bits compilation of global tools${reset}"
@@ -490,26 +491,18 @@ _check=(libwebp{,mux}.{a,pc})
     bin-global/{{c,d}webp,webpmux,img2webp}.exe)
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_vcs "https://chromium.googlesource.com/webm/libwebp"; then
-    cd "$MINGW_PREFIX/share/cmake-3.20" && {
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0001-FindPkgConfig-split-args-if-loaded-from-environment.patch"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0002-FindTIFF-Use-pkg-config-for-finding-dependencies.patch"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0003-FindGLUT-Use-pkg-config-for-finding-dependencies.patch"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0004-FindZLIB-Use-pkg-config-for-finding-dependencies.patch"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0005-FindPNG-Use-pkg-config-for-finding-dependencies.patch"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/cmake/0006-FindJPEG-Use-pkg-config-for-finding-dependencies.patch"
-        cd - > /dev/null 2>&1 || true
-    } > /dev/null 2>&1
     do_pacman_install giflib
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-CMake-set-CMP0072-to-NEW.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-build-libwebpmux-for-2-additional-flags.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-CMake-add-WEBP_BUILD_LIBWEBPMUX.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-CMake-set-CMP0072-to-NEW.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-target_include_directories-instead-of-incl.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-CMake-use-import-libraries-if-possible-for-vwebp.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-use-import-library-for-SDL-if-available.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-include-src-along-with-binary_dir-src.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0011-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
     do_uninstall include/webp bin-global/gif2webp.exe "${_check[@]}"
     extracommands=("-DWEBP_BUILD_EXTRAS=OFF")
     if [[ $standalone = y ]]; then
