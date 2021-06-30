@@ -492,21 +492,20 @@ _check=(libwebp{,mux}.{a,pc})
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_vcs "https://chromium.googlesource.com/webm/libwebp"; then
     do_pacman_install giflib
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-CMake-add-WEBP_BUILD_LIBWEBPMUX.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-CMake-set-CMP0072-to-NEW.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-target_include_directories-instead-of-incl.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-CMake-use-import-libraries-if-possible-for-vwebp.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-use-import-library-for-SDL-if-available.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-include-src-along-with-binary_dir-src.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0011-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-use-target_include_directories-instead-of-incl.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-use-import-libraries-if-possible-for-vwebp.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-import-library-for-SDL-if-available.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-CMake-include-src-along-with-binary_dir-src.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-deps-use-pkg-config-instead-of-find_package.patch" am
     do_uninstall include/webp bin-global/gif2webp.exe "${_check[@]}"
-    extracommands=("-DWEBP_BUILD_EXTRAS=OFF")
+    extracommands=("-DWEBP_BUILD_EXTRAS=OFF" "-DWEBP_BUILD_VWEBP=OFF")
     if [[ $standalone = y ]]; then
-        extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2,V}WEBP,ANIM_UTILS,WEBPMUX}"=ON")
+        extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2}WEBP,ANIM_UTILS,WEBPMUX}"=ON")
     else
         extracommands+=(-DWEBP_BUILD_{{C,D,GIF2,IMG2,V}WEBP,ANIM_UTILS,WEBPMUX}"=OFF")
     fi
@@ -1094,6 +1093,7 @@ if { [[ $rav1e = y ]] || [[ $libavif = y ]] || enabled librav1e; } &&
         # do_install "install-$bits/lib/librav1e.dll.a" lib/
         do_install "$(find "install-$bits/" -name "librav1e.a")" lib/
         do_install "$(find "install-$bits/" -name "rav1e.pc")" lib/pkgconfig/
+        sed -i 's/\\/\//g' "$LOCALDESTDIR/lib/pkgconfig/rav1e.pc" >/dev/null 2>&1
         do_install "$(find "install-$bits/" -name "rav1e")"/*.h include/rav1e/
     fi
 
@@ -1720,8 +1720,9 @@ fi
 _check=(librist.{a,pc} librist/librist.h bin-global/rist{sender,receiver,2rist,srppasswd}.exe)
 if enabled librist && do_vcs "https://code.videolan.org/rist/librist.git"; then
     do_patch "https://code.videolan.org/1480c1/librist/-/commit/67d4aafc2f580f354846f3e866b350a190539f9b.patch" am
+    do_patch "https://code.videolan.org/rist/librist/-/merge_requests/176.patch" am
     do_uninstall include/librist "${_check[@]}"
-    extracommands=()
+    extracommands=("-Ddisable_json=true")
     [[ $standalone = y ]] || extracommands+=("-Dbuilt_tools=false")
     do_mesoninstall global -Dhave_mingw_pthreads=true -Dtest=false "${extracommands[@]}"
     do_checkIfExist
