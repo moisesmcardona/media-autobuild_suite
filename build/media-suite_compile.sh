@@ -1721,9 +1721,8 @@ _check=(librist.{a,pc} librist/librist.h)
 [[ $standalone = y ]] && _check+=(bin-global/rist{sender,receiver,2rist,srppasswd}.exe)
 if enabled librist && do_vcs "https://code.videolan.org/rist/librist.git"; then
     do_patch "https://code.videolan.org/1480c1/librist/-/commit/67d4aafc2f580f354846f3e866b350a190539f9b.patch" am
-    do_patch "https://code.videolan.org/rist/librist/-/merge_requests/176.patch" am
     do_uninstall include/librist "${_check[@]}"
-    extracommands=("-Ddisable_json=true")
+    extracommands=("-Dallow_obj_filter=true")
     [[ $standalone = y ]] || extracommands+=("-Dbuilt_tools=false")
     do_mesoninstall global -Dhave_mingw_pthreads=true -Dtest=false "${extracommands[@]}"
     do_checkIfExist
@@ -1743,7 +1742,7 @@ if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
         do_checkIfExist
     fi
 
-    _vsver=53
+    _vsver=54
     _check=(lib{vapoursynth,vsscript}.a vapoursynth{,-script}.pc vapoursynth/{VS{Helper,Script},VapourSynth}.h)
     if pc_exists "vapoursynth = $_vsver" && files_exist "${_check[@]}"; then
         do_print_status "vapoursynth R$_vsver" "$green" "Up-to-date"
