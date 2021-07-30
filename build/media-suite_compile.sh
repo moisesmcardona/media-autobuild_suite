@@ -1720,7 +1720,7 @@ fi
 _check=(librist.{a,pc} librist/librist.h)
 [[ $standalone = y ]] && _check+=(bin-global/rist{sender,receiver,2rist,srppasswd}.exe)
 if enabled librist && do_vcs "https://code.videolan.org/rist/librist.git"; then
-    do_patch "https://code.videolan.org/1480c1/librist/-/commit/67d4aafc2f580f354846f3e866b350a190539f9b.patch" am
+    do_patch "https://code.videolan.org/1480c1/librist/-/commit/66cedb7b847b02024b3fe38e6165f0bfe3ec98f5.patch" am
     do_uninstall include/librist "${_check[@]}"
     extracommands=("-Dallow_obj_filter=true")
     [[ $standalone = y ]] || extracommands+=("-Dbuilt_tools=false")
