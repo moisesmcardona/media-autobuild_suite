@@ -191,8 +191,7 @@ fi
 _check=(bin-global/jo.exe)
 if [[ $jo = y ]] &&
     do_vcs "https://github.com/jpmens/jo.git"; then
-    do_autoreconf
-    do_separate_confmakeinstall global
+    do_mesoninstall global
     do_checkIfExist
 fi
 
@@ -200,6 +199,7 @@ _deps=("$MINGW_PREFIX"/lib/pkgconfig/oniguruma.pc)
 _check=(bin-global/jq.exe)
 if [[ $jq = y ]] &&
     do_vcs "https://github.com/stedolan/jq.git"; then
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/jq/0001-jv_thread-try-using-HAVE_PTHREAD_KEY_CREATE-instead.patch" am
     do_pacman_install oniguruma
     do_uninstall "${_check[@]}"
     do_autoreconf
@@ -477,7 +477,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
         do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/233.patch" am
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
             '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd glut'
-        CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX}=OFF
+        CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX,lerc}=OFF
         do_checkIfExist
     fi
 fi
@@ -1108,6 +1108,7 @@ if [[ $libavif = y ]] && {
     do_vcs "https://github.com/AOMediaCodec/libavif.git"; then
     do_uninstall "${_check[@]}"
     do_pacman_install libjpeg-turbo
+    do_patch "https://github.com/AOMediaCodec/libavif/pull/751.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0001-CMake-Use-the-import-libraries-and-the-proper-variab.patch" am
     extracommands=()
     pc_exists "dav1d" && extracommands+=("-DAVIF_CODEC_DAV1D=ON")
@@ -1496,7 +1497,6 @@ if [[ $x264 != no ]]; then
         if [[ $standalone = y && $x264 =~ (full|fullv) ]]; then
             _check=("$LOCALDESTDIR"/opt/lightffmpeg/lib/pkgconfig/libav{codec,format}.pc)
             do_vcs "https://git.ffmpeg.org/ffmpeg.git"
-            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-get_cabac_inline_x86-Don-t-inline-if-32-bit-clang-on.patch" am
             do_uninstall "$LOCALDESTDIR"/opt/lightffmpeg
             [[ -f config.mak ]] && log "distclean" make distclean
             create_build_dir light
@@ -1712,7 +1712,7 @@ if enabled libsrt && do_vcs "https://github.com/Haivision/srt.git"; then
     do_pacman_install openssl
     hide_libressl
     do_cmakeinstall video -DENABLE_SHARED=off -DENABLE_SUFLIP=off \
-        -DENABLE_EXAMPLES=off -DUSE_OPENSSL_PC=on
+        -DENABLE_EXAMPLES=off -DUSE_OPENSSL_PC=on -DUSE_STATIC_LIBSTDCXX=ON
     hide_libressl -R
     do_checkIfExist
 fi
@@ -1720,9 +1720,9 @@ fi
 _check=(librist.{a,pc} librist/librist.h)
 [[ $standalone = y ]] && _check+=(bin-global/rist{sender,receiver,2rist,srppasswd}.exe)
 if enabled librist && do_vcs "https://code.videolan.org/rist/librist.git"; then
-    do_patch "https://code.videolan.org/1480c1/librist/-/commit/66cedb7b847b02024b3fe38e6165f0bfe3ec98f5.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/librist/0001-Workaround-fixes-for-cJSON-symbol-collision.patch" am
     do_uninstall include/librist "${_check[@]}"
-    extracommands=("-Dallow_obj_filter=true")
+    extracommands=("-Ddisable_json=true")
     [[ $standalone = y ]] || extracommands+=("-Dbuilt_tools=false")
     do_mesoninstall global -Dhave_mingw_pthreads=true -Dtest=false "${extracommands[@]}"
     do_checkIfExist
@@ -1844,6 +1844,7 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     do_uninstall "${_check[@]}"
     do_patch "$_mabs/vulkan-loader/0001-loader-cross-compile-static-linking-hacks.patch" am
     do_patch "$_mabs/vulkan-loader/0002-loader-vulkan.pc.in-use-the-normal-prefix-and-exec_p.patch" am
+    do_patch "$_mabs/vulkan-loader/0003-pc-remove-CMAKE_CXX_IMPLICIT_LINK_LIBRARIES.patch" am
     grep_and_sed VULKAN_LIB_SUFFIX loader/vulkan.pc.in \
             's/@VULKAN_LIB_SUFFIX@//'
     create_build_dir
@@ -1907,12 +1908,12 @@ if [[ $ffmpeg != no ]]; then
         if test_newer "$MINGW_PREFIX"/lib/libopenh264.dll.a "$LOCALDESTDIR/bin-video/libopenh264.dll"; then
             pushd "$LOCALDESTDIR/bin-video" >/dev/null || do_exit_prompt "Did you delete the bin-video folder?"
             if [[ $bits = 64bit ]]; then
-              _sha256=273f8f6f8e964ec26986efdf78fa17b7e344640987a64fd1f6ac9f3bec2bebad
+              _sha256=d629f6aa5a38ed12266c3acb4c9a433b2960e3f55934db5b9740e85cf16c196c
             else
-              _sha256=7be41e496f43272b707e4d9bafdfc27d53b00aaf9468667a4a2107c192b27249
+              _sha256=e0ca9dced2bffbe541730d4b31fa0c6c2407c2ce01eadccea90bf153d00ed595
             fi
             do_wget -c -r -q -h $_sha256 \
-            "https://github.com/cisco/openh264/releases/download/v2.0.0/openh264-2.0.0-win${bits%bit}.dll.bz2" \
+            "https://github.com/cisco/openh264/releases/download/v2.1.1/openh264-2.1.1-win${bits%bit}.dll.bz2" \
                 libopenh264.dll.bz2
             [[ -f libopenh264.dll.bz2 ]] && bunzip2 libopenh264.dll.bz2
             unset _sha256
@@ -1957,9 +1958,6 @@ if [[ $ffmpeg != no ]]; then
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
-
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-get_cabac_inline_x86-Don-t-inline-if-32-bit-clang-on.patch" am
-
         if enabled libsvthevc; then
             do_patch "https://raw.githubusercontent.com/OpenVisualCloud/SVT-HEVC/master/ffmpeg_plugin/master-0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch" am ||
                 do_removeOption --enable-libsvthevc
