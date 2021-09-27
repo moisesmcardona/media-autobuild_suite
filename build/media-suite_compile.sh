@@ -234,15 +234,14 @@ if [[ $mplayer = y || $mpv = y ]] ||
     { [[ $ffmpeg != no ]] && enabled_any libass libfreetype {lib,}fontconfig libfribidi; }; then
     do_pacman_remove freetype fontconfig harfbuzz fribidi
 
-    _check=(libfreetype.{l,}a freetype2.pc)
+    _check=(libfreetype.a freetype2.pc)
     [[ $ffmpeg = sharedlibs ]] && _check+=(bin-video/libfreetype-6.dll libfreetype.dll.a)
     if do_vcs "https://gitlab.freedesktop.org/freetype/freetype.git#tag=LATEST"; then
-        do_autogen
         do_uninstall include/freetype2 bin-global/freetype-config \
             bin{,-video}/libfreetype-6.dll libfreetype.dll.a "${_check[@]}"
-        extracommands=(--with-{harfbuzz,png,bzip2,brotli,zlib}"=no")
-        [[ $ffmpeg = sharedlibs ]] && extracommands+=(--enable-shared)
-        do_separate_confmakeinstall global "${extracommands[@]}"
+        extracommands=(-D{harfbuzz,png,bzip2,brotli,zlib,tests}"=disabled")
+        [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
+        do_mesoninstall global "${extracommands[@]}"
         [[ $ffmpeg = sharedlibs ]] && do_install "$LOCALDESTDIR"/bin/libfreetype-6.dll bin-video/
         do_checkIfExist
     fi
@@ -985,7 +984,7 @@ fi
 
 _check=(libvpx.a vpx.pc)
 [[ $standalone = y ]] && _check+=(bin-video/vpxenc.exe)
-if [[ $vpx = y ]] && do_vcs "https://chromium.googlesource.com/webm/libvpx" vpx; then
+if { enabled libvpx || [[ $vpx = y ]]; } && do_vcs "https://chromium.googlesource.com/webm/libvpx" vpx; then
     extracommands=()
     [[ -f config.mk ]] && log "distclean" make distclean
     [[ $standalone = y ]] && _check+=(bin-video/vpxdec.exe) ||
@@ -1843,8 +1842,7 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     _shinchiro=https://raw.githubusercontent.com/shinchiro/mpv-winbuild-cmake/master
     do_uninstall "${_check[@]}"
     do_patch "$_mabs/vulkan-loader/0001-loader-cross-compile-static-linking-hacks.patch" am
-    do_patch "$_mabs/vulkan-loader/0002-loader-vulkan.pc.in-use-the-normal-prefix-and-exec_p.patch" am
-    do_patch "$_mabs/vulkan-loader/0003-pc-remove-CMAKE_CXX_IMPLICIT_LINK_LIBRARIES.patch" am
+    do_patch "$_mabs/vulkan-loader/0002-pc-remove-CMAKE_CXX_IMPLICIT_LINK_LIBRARIES.patch" am
     grep_and_sed VULKAN_LIB_SUFFIX loader/vulkan.pc.in \
             's/@VULKAN_LIB_SUFFIX@//'
     create_build_dir
@@ -2293,7 +2291,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     if ! mpv_disabled spirv-cross &&
         do_vcs "https://github.com/KhronosGroup/SPIRV-Cross.git"; then
         do_uninstall include/spirv_cross "${_check[@]}" spirv-cross-c-shared.pc libspirv-cross-c-shared.a
-        do_patch "https://github.com/KhronosGroup/SPIRV-Cross/compare/master...taisei-project:meson.patch meson.patch" am
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/SPIRV-Cross/0001-add-a-basic-Meson-build-system-for-use-as-a-subproje.patch" am
         do_mesoninstall
         do_checkIfExist
     fi
@@ -2409,7 +2407,6 @@ if [[ $bmx = y ]]; then
 
     _check=(bin-video/MXFDump.exe libMXF-1.0.{{,l}a,pc})
     if do_vcs "https://gitlab.com/m-ab-s/libmxf.git" libMXF-1.0; then
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libmxf/0001-Add-spaces-between-quotes-and-literal.patch" am
         do_autogen
         do_uninstall include/libMXF-1.0 "${_check[@]}"
         do_separate_confmakeinstall video --disable-examples
