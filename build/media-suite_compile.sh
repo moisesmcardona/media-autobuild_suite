@@ -281,7 +281,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
     if do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
         do_pacman_install ragel
         do_uninstall include/harfbuzz "${_check[@]}" libharfbuzz{-subset,}.la
-        extracommands=(-D{glib,gobject,cairo,fontconfig,icu,tests,introspection,docs,benchmark}"=disabled")
+        extracommands=(-D{glib,gobject,cairo,icu,tests,introspection,docs,benchmark}"=disabled")
         [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
         do_mesoninstall global "${extracommands[@]}"
         # directwrite shaper doesn't work with mingw headers, maybe too old
@@ -334,9 +334,9 @@ if [[ $curl = y ]]; then
 fi
 _check=(libgnutls.{,l}a gnutls.pc)
 if enabled_any gnutls librtmp || [[ $rtmpdump = y || $curl = gnutls ]] &&
-    do_pkgConfig "gnutls = 3.6.13" &&
-    do_wget -h 32041df447d9f4644570cf573c9f60358e865637d69b7e59d1159b7240b52f38 \
-    "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.13.tar.xz"; then
+    do_pkgConfig "gnutls = 3.6.16" &&
+    do_wget -h 1b79b381ac283d8b054368b335c408fedcb9b7144e0c07f531e3537d4328f3b3 \
+    "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.16.tar.xz"; then
         do_pacman_install nettle
         do_uninstall include/gnutls "${_check[@]}"
         grep_or_sed crypt32 lib/gnutls.pc.in 's/Libs.private.*/& -lcrypt32/'
@@ -401,15 +401,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
     fi
 fi
 
-# fix retarded google naming schemes for brotli
 do_pacman_install brotli
-grep_and_sed '-static' "$MINGW_PREFIX"/lib/pkgconfig/libbrotlidec.pc 's;-static;;' \
-    "$MINGW_PREFIX"/lib/pkgconfig/libbrotli{enc,dec,common}.pc
-for lib in common dec enc; do
-    lib=$MINGW_PREFIX/lib/libbrotli$lib
-    ln -sf "$lib-static.a" "$lib.a"
-done
-unset lib
 
 _check=(curl/curl.h libcurl.{{,l}a,pc})
 case $curl in
@@ -1592,6 +1584,7 @@ fi
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
 if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git"; then
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/x265/0001-cmake-split-absolute-library-paths-to-L-and-l.patch" am
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
     [[ $bits = 32bit ]] && assembly=-DENABLE_ASSEMBLY=OFF
     [[ $x265 = d ]] && xpsupport=-DWINXP_SUPPORT=ON
@@ -1796,6 +1789,7 @@ if [[ $ffmpeg != no ]] && enabled liblensfun &&
     do_vcs "https://github.com/lensfun/lensfun.git"; then
     do_pacman_install glib2
     grep_or_sed liconv "$MINGW_PREFIX/lib/pkgconfig/glib-2.0.pc" 's;-lintl;& -liconv;g'
+    grep_or_sed uuid "$MINGW_PREFIX/lib/pkgconfig/glib-2.0.pc" 's/Libs.private.*/& -luuid/'
     grep_or_sed Libs.private libs/lensfun/lensfun.pc.cmake '/Libs:/ a\Libs.private: -lstdc++'
     do_uninstall "bin-video/lensfun" "${_check[@]}"
     do_patch "https://github.com/m-ab-s/mabs-patches/raw/master/lensfun/0001-CMake-exclude-mingw-w64-from-some-msvc-exclusive-thi.patch"
@@ -1865,7 +1859,8 @@ fi
 
 _check=(lib{glslang,OSDependent,HLSL,OGLCompiler,SPVRemapper}.a
         libSPIRV{,-Tools{,-opt,-link,-reduce}}.a glslang/SPIRV/GlslangToSpv.h)
-if [[ $ffmpeg != no ]] && enabled libglslang &&
+if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
+     { [[ $ffmpeg != no ]] && enabled libglslang; } } &&
     do_vcs "https://github.com/KhronosGroup/glslang.git"; then
     do_uninstall "${_check[@]}"
     log dependencies /usr/bin/python ./update_glslang_sources.py
@@ -2440,6 +2435,7 @@ if [[ $cyanrip = y ]]; then
 
     _check=(neon/ne_utils.h libneon.a neon.pc)
     if do_vcs "https://github.com/notroj/neon.git"; then
+        do_patch "https://github.com/notroj/neon/pull/69.patch" am
         do_uninstall include/neon "${_check[@]}"
         do_autogen
         do_separate_confmakeinstall --disable-{nls,debug,webdav}
