@@ -1099,8 +1099,8 @@ if [[ $libavif = y ]] && {
     do_vcs "https://github.com/AOMediaCodec/libavif.git"; then
     do_uninstall "${_check[@]}"
     do_pacman_install libjpeg-turbo
-    do_patch "https://github.com/AOMediaCodec/libavif/pull/751.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0001-CMake-Use-the-import-libraries-and-the-proper-variab.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0002-Findrav1e-add-ldflags-to-libraries.patch" am
     extracommands=()
     pc_exists "dav1d" && extracommands+=("-DAVIF_CODEC_DAV1D=ON")
     pc_exists "rav1e" && extracommands+=("-DAVIF_CODEC_RAV1E=ON")
@@ -1114,23 +1114,17 @@ if [[ $libavif = y ]] && {
 fi
 
 _check=(bin-global/{c,d}jxl.exe)
-if [[ $jpegxl = y ]] && do_vcs "https://gitlab.com/wg1/jpeg-xl.git"; then
+if [[ $jpegxl = y ]] && do_vcs "https://github.com/libjxl/libjxl.git"; then
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libjxl/0001-brotli-add-ldflags.patch" am
     do_uninstall "${_check[@]}"
     do_pacman_remove asciidoc-py3-git
     do_pacman_install lcms2 asciidoc
     log -q "git.submodule" git submodule update --init --recursive
-    extra_cxxflags=()
-    if [[ ${CC##* } = gcc ]]; then
-        do_simple_print -p "${orange}Warning: JPEG-XL compiled with GCC will not use SIMD optimizations!$reset"
-        extra_cxxflags+=('-DHWY_COMPILE_ONLY_SCALAR')
-    fi
-    CXXFLAGS+=" ${extra_cxxflags[*]}" \
-        do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{OPENEXR,SKCMS,BENCHMARK}}=OFF \
+    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{OPENEXR,SKCMS,BENCHMARK}}=OFF \
         -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC}=ON -DJPEGXL_ENABLE_MANPAGES=OFF
     do_ninja
     do_install tools/{c,d}jxl.exe bin-global/
     do_checkIfExist
-    unset extra_cxxflags
 fi
 
 _check=(libkvazaar.{,l}a kvazaar.pc kvazaar.h)
@@ -1409,6 +1403,7 @@ fi
 _check=(AMF/core/Version.h)
 if [[ $ffmpeg != no ]] && { enabled amf || ! disabled_any autodetect amf; } &&
     do_vcs "https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git"; then
+    do_patch "https://github.com/GPUOpen-LibrariesAndSDKs/AMF/pull/286.patch"
     do_uninstall include/AMF
     cd_safe amf/public/include
     install -D -p -t "$LOCALDESTDIR/include/AMF/core" core/*.h
