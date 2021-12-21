@@ -1100,7 +1100,6 @@ if [[ $libavif = y ]] && {
     do_uninstall "${_check[@]}"
     do_pacman_install libjpeg-turbo
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0001-CMake-Use-the-import-libraries-and-the-proper-variab.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0002-Findrav1e-add-ldflags-to-libraries.patch" am
     extracommands=()
     pc_exists "dav1d" && extracommands+=("-DAVIF_CODEC_DAV1D=ON")
     pc_exists "rav1e" && extracommands+=("-DAVIF_CODEC_RAV1E=ON")
@@ -1403,7 +1402,7 @@ fi
 _check=(AMF/core/Version.h)
 if [[ $ffmpeg != no ]] && { enabled amf || ! disabled_any autodetect amf; } &&
     do_vcs "https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git"; then
-    do_patch "https://github.com/GPUOpen-LibrariesAndSDKs/AMF/pull/286.patch"
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/AMF/0001-Platform.h-tie-typedef-for-HRESULT-to-windows.patch" am
     do_uninstall include/AMF
     cd_safe amf/public/include
     install -D -p -t "$LOCALDESTDIR/include/AMF/core" core/*.h
@@ -2244,6 +2243,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     _check=(shaderc/shaderc.h libshaderc_combined.a)
     if ! mpv_disabled shaderc &&
         do_vcs "https://github.com/google/shaderc.git"; then
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/shaderc/0001-third_party-set-INSTALL-variables-as-cache.patch" am
         do_uninstall "${_check[@]}" include/shaderc include/libshaderc_util
 
         add_third_party() {
@@ -2268,11 +2268,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         # fix python indentation errors from non-existant code review
         grep -ZRlP --include="*.py" '\t' third_party/spirv-tools/ | xargs -r -0 -n1 sed -i 's;\t;    ;g'
 
-        do_cmake -GNinja -DSHADERC_SKIP_TESTS=ON -DSHADERC_ENABLE_WERROR_COMPILE=OFF
-        log make ninja
-        cmake -E copy_directory ../libshaderc/include/shaderc "$LOCALDESTDIR/include/shaderc"
-        cmake -E copy_directory ../libshaderc_util/include/libshaderc_util "$LOCALDESTDIR/include/libshaderc_util"
-        do_install libshaderc/libshaderc_combined.a lib/
+        do_cmakeinstall -GNinja -DSHADERC_SKIP_{TESTS,EXAMPLES}=ON -DSHADERC_ENABLE_WERROR_COMPILE=OFF -DSKIP_{GLSLANG,SPIRV_TOOLS,GOOGLETEST}_INSTALL=ON -DSPIRV_HEADERS_SKIP_{INSTALL,EXAMPLES}=ON
         do_checkIfExist
         unset add_third_party
     fi
