@@ -1117,10 +1117,10 @@ if [[ $jpegxl = y ]] && do_vcs "https://github.com/libjxl/libjxl.git"; then
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libjxl/0001-brotli-add-ldflags.patch" am
     do_uninstall "${_check[@]}"
     do_pacman_remove asciidoc-py3-git
-    do_pacman_install lcms2 asciidoc gflags
+    do_pacman_install lcms2 asciidoc
     log -q "git.submodule" git submodule update --init --recursive
-    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{OPENEXR,SKCMS,BENCHMARK}}=OFF \
-        -DJPEGXL_{FORCE_SYSTEM_BROTLI,STATIC}=ON -DJPEGXL_ENABLE_MANPAGES=OFF
+    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS}}=OFF \
+        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON
     do_ninja
     do_install tools/{c,d}jxl.exe bin-global/
     do_checkIfExist
@@ -1862,6 +1862,18 @@ if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
     do_checkIfExist
 fi
 
+_check=(libplacebo.{a,pc})
+_deps=(lib{vulkan,shaderc_combined}.a)
+if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
+     { [[ $ffmpeg != no ]] && enabled libplacebo; } } &&
+    do_vcs "https://code.videolan.org/videolan/libplacebo.git"; then
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libplacebo/0001-meson-use-shaderc_combined.patch" am
+    do_pacman_install python-mako
+    do_uninstall "${_check[@]}"
+    do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false
+    do_checkIfExist
+fi
+
 enabled openssl && hide_libressl
 if [[ $ffmpeg != no ]]; then
     enabled libgsm && do_pacman_install gsm
@@ -2283,16 +2295,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         do_uninstall include/spirv_cross "${_check[@]}" spirv-cross-c-shared.pc libspirv-cross-c-shared.a
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/SPIRV-Cross/0001-add-a-basic-Meson-build-system-for-use-as-a-subproje.patch" am
         do_mesoninstall
-        do_checkIfExist
-    fi
-
-    _check=(libplacebo.{a,pc})
-    _deps=(lib{vulkan,shaderc_combined}.a)
-    if ! mpv_disabled libplacebo &&
-        do_vcs "https://code.videolan.org/videolan/libplacebo.git"; then
-        do_pacman_install python-mako
-        do_uninstall "${_check[@]}"
-        do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false
         do_checkIfExist
     fi
 
