@@ -485,10 +485,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-use-target_include_directories-instead-of-incl.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-use-import-libraries-if-possible-for-vwebp.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-import-library-for-SDL-if-available.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-CMake-include-src-along-with-binary_dir-src.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-deps-use-pkg-config-instead-of-find_package.patch" am
@@ -1813,11 +1810,13 @@ if [[ $bits = 64bit && $vvc = y ]] &&
 fi
 
 _check=(avisynth/avisynth{,_c}.h
-        avisynth/avs/{alignment,capi,config,cpuid,minmax,posix,types,win}.h)
+        avisynth/avs/{alignment,arch,capi,config,cpuid,minmax,posix,types,win,version}.h)
 if [[ $ffmpeg != no ]] && enabled avisynth &&
     do_vcs "https://github.com/AviSynth/AviSynthPlus.git"; then
     do_uninstall "${_check[@]}"
-    do_cmakeinstall -DHEADERS_ONLY=ON
+    do_cmake -DHEADERS_ONLY=ON
+    do_ninja VersionGen
+    do_ninjainstall 
     do_checkIfExist
 fi
 
@@ -1850,6 +1849,18 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     unset _DeadSix27 _mabs _shinchiro
 fi
 
+_check=(spirv_cross/spirv_cross_c.h spirv-cross.pc libspirv-cross.a)
+if { { [[ $mpv != n ]] && ! mpv_disabled libplacebo; } ||
+     { [[ $mpv != n ]] && ! mpv_disabled spirv-cross; } ||
+     { [[ $ffmpeg != no ]] && enabled libplacebo; } } &&
+    do_vcs "https://github.com/KhronosGroup/SPIRV-Cross.git"; then
+    do_uninstall include/spirv_cross "${_check[@]}" spirv-cross-c-shared.pc libspirv-cross-c-shared.a
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/SPIRV-Cross/0001-add-a-basic-Meson-build-system-for-use-as-a-subproje.patch" am
+    sed -i 's/0.13.0/0.48.0/' meson.build
+    do_mesoninstall
+    do_checkIfExist
+fi
+
 _check=(lib{glslang,OSDependent,HLSL,OGLCompiler,SPVRemapper}.a
         libSPIRV{,-Tools{,-opt,-link,-reduce}}.a glslang/SPIRV/GlslangToSpv.h)
 if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
@@ -1862,14 +1873,15 @@ if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
 fi
 
 _check=(libplacebo.{a,pc})
-_deps=(lib{vulkan,shaderc_combined}.a)
+_deps=(lib{vulkan,shaderc_combined}.a spirv-cross.pc)
 if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
      { [[ $ffmpeg != no ]] && enabled libplacebo; } } &&
     do_vcs "https://code.videolan.org/videolan/libplacebo.git"; then
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libplacebo/0001-meson-use-shaderc_combined.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libplacebo/0002-spirv-cross-use-spirv-cross-instead-of-c-shared.patch" am
     do_pacman_install python-mako
     do_uninstall "${_check[@]}"
-    do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false
+    do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false -Dd3d11=enabled
     do_checkIfExist
 fi
 
@@ -2287,15 +2299,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
 
     file_installed -s shaderc.pc && file_installed -s shaderc_static.pc &&
         mv "$(file_installed shaderc_static.pc)" "$(file_installed shaderc.pc)"
-
-    _check=(spirv_cross/spirv_cross_c.h spirv-cross.pc libspirv-cross.a)
-    if ! mpv_disabled spirv-cross &&
-        do_vcs "https://github.com/KhronosGroup/SPIRV-Cross.git"; then
-        do_uninstall include/spirv_cross "${_check[@]}" spirv-cross-c-shared.pc libspirv-cross-c-shared.a
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/SPIRV-Cross/0001-add-a-basic-Meson-build-system-for-use-as-a-subproje.patch" am
-        do_mesoninstall
-        do_checkIfExist
-    fi
 
     _check=()
     ! mpv_disabled cplayer && _check+=(bin-video/mpv.{exe,com})
