@@ -465,6 +465,8 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
         do_pacman_install libjpeg-turbo xz zlib zstd libdeflate
         do_uninstall "${_check[@]}"
         do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/233.patch" am
+        do_patch "https://gitlab.com/1480c1/libtiff/-/commit/ff3d7f8300b143903c7e9296a5be88ea6144ae88.patch" am
+        do_patch "https://gitlab.com/1480c1/libtiff/-/commit/2992ba372025f3bc273263391f6650148be7ae6c.patch" am
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
             '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd glut'
         CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX,lerc}=OFF
@@ -1115,8 +1117,9 @@ if [[ $jpegxl = y ]] && do_vcs "https://github.com/libjxl/libjxl.git"; then
     do_pacman_remove asciidoc-py3-git
     do_pacman_install lcms2 asciidoc
     log -q "git.submodule" git submodule update --init --recursive
-    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS}}=OFF \
-        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON
+    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS,EXAMPLES}}=OFF \
+        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON \
+        -DJPEGXL_FORCE_SYSTEM_HWY=OFF
     do_ninja
     do_install tools/{c,d}jxl.exe bin-global/
     do_checkIfExist
