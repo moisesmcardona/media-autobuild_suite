@@ -464,8 +464,6 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
     if do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
         do_pacman_install libjpeg-turbo xz zlib zstd libdeflate
         do_uninstall "${_check[@]}"
-        do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/233.patch" am
-        do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/317.patch" am
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
             '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd glut'
         CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX,lerc}=OFF
@@ -486,10 +484,10 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-import-library-for-SDL-if-available.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-deps-use-pkg-config-instead-of-find_package.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-use-import-library-for-SDL-if-available.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-deps-use-pkg-config-instead-of-find_package.patch" am
     do_uninstall include/webp bin-global/gif2webp.exe "${_check[@]}"
     extracommands=("-DWEBP_BUILD_EXTRAS=OFF" "-DWEBP_BUILD_VWEBP=OFF")
     if [[ $standalone = y ]]; then
