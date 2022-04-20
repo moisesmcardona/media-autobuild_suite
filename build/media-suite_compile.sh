@@ -223,7 +223,7 @@ if { enabled libxml2 || [[ $cyanrip = y ]]; } &&
     do_uninstall include/libxml2/libxml "${_check[@]}"
     NOCONFIGURE=true do_autogen
     [[ -f config.mak ]] && log "distclean" make distclean
-    sed -ri 's|(bin_PROGRAMS = ).*|\1|g;/^runtest_SOURCES.*/,/We create xml2Conf.*/d' Makefile.am
+    sed -ri 's|(bin_PROGRAMS = ).*|\1|g' Makefile.am
     CFLAGS+=" -DLIBXML_STATIC_FOR_DLL -DNOLIBTOOL" \
         do_separate_confmakeinstall --without-python
     do_checkIfExist
@@ -413,6 +413,7 @@ esac
 [[ $standalone = y || $curl != n ]] && _check+=(bin-global/curl.exe)
 if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]] &&
     do_vcs "https://github.com/curl/curl.git#tag=LATEST"; then
+    do_patch "https://github.com/curl/curl/pull/8728.patch" am
     do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-curl/0003-libpsl-static-libs.patch"
     do_pacman_install nghttp2
 
@@ -482,12 +483,10 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_vcs "https://chromium.googlesource.com/webm/libwebp"; then
     do_pacman_install giflib
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-use-import-library-for-SDL-if-available.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-deps-use-pkg-config-instead-of-find_package.patch" am
     do_uninstall include/webp bin-global/gif2webp.exe "${_check[@]}"
     extracommands=("-DWEBP_BUILD_EXTRAS=OFF" "-DWEBP_BUILD_VWEBP=OFF")
     if [[ $standalone = y ]]; then
@@ -551,6 +550,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         do_uninstall include/tesseract "${_check[@]}"
         sed -i -e 's|Libs.private.*|& -lstdc++|' \
                -e 's|Requires.private.*|& libarchive iconv libtiff-4|' tesseract.pc.in
+        grep_or_sed ws2_32 "$MINGW_PREFIX/lib/pkgconfig/libarchive.pc" 's;Libs.private:.*;& -lws2_32;g'
         case $CC in
         *gcc) sed -i -e 's|Libs.private.*|& -fopenmp -lgomp|' tesseract.pc.in ;;
         *clang) sed -i -e 's|Libs.private.*|& -fopenmp=libomp|' tesseract.pc.in ;;
@@ -575,13 +575,12 @@ fi
 
 _check=(librubberband.a rubberband.pc rubberband/{rubberband-c,RubberBandStretcher}.h)
 if { { [[ $ffmpeg != no ]] && enabled librubberband; } ||
-    ! mpv_disabled rubberband; } && do_pkgConfig "rubberband = 1.8.1" &&
+    ! mpv_disabled rubberband; } &&
     do_vcs "https://github.com/m-ab-s/rubberband.git"; then
     do_uninstall "${_check[@]}"
     log "distclean" make distclean
     do_make PREFIX="$LOCALDESTDIR" install-static
     do_checkIfExist
-    add_to_remove
 fi
 
 _check=(zimg{.h,++.hpp} libzimg.{,l}a zimg.pc)
@@ -614,7 +613,6 @@ if [[ $ffmpeg != no ]] && enabled libilbc &&
     log -q "git.submodule" git submodule update --init --recursive
     do_cmakeinstall -DUNIX=OFF
     do_checkIfExist
-    add_to_remove
 fi
 
 grep_or_sed stdc++ "$(file_installed libilbc.pc)" "/Libs:/ a\Libs.private: -lstdc++"
@@ -624,7 +622,6 @@ enabled libspeex && do_pacman_install speex
 
 _check=(bin-audio/speex{enc,dec}.exe)
 if [[ $standalone = y ]] && enabled libspeex &&
-    ! grep -q '1.2.0' "$LOCALDESTDIR/bin-audio/speexenc.exe" 2> /dev/null &&
     do_vcs "https://github.com/xiph/speex.git"; then
     do_uninstall include/speex libspeex.{l,}a speex.pc "${_check[@]}"
     do_autoreconf
@@ -632,7 +629,6 @@ if [[ $standalone = y ]] && enabled libspeex &&
     do_make
     do_install src/speex{enc,dec}.exe bin-audio/
     do_checkIfExist
-    add_to_remove
 fi
 
 _check=(libFLAC{,++}.{,l}a flac{,++}.pc)
@@ -722,7 +718,6 @@ if [[ $standalone = y ]] && enabled libvorbis &&
     do_make
     do_install oggenc/oggenc.exe oggdec/oggdec.exe bin-audio/
     do_checkIfExist
-    add_to_remove
 fi
 
 _check=(libopus.{,l}a opus.pc opus/opus.h)
@@ -1094,7 +1089,6 @@ if [[ $libavif = y ]] && {
     do_vcs "https://github.com/AOMediaCodec/libavif.git"; then
     do_uninstall "${_check[@]}"
     do_pacman_install libjpeg-turbo
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libavif/0001-CMake-Use-the-import-libraries-and-the-proper-variab.patch" am
     extracommands=()
     pc_exists "dav1d" && extracommands+=("-DAVIF_CODEC_DAV1D=ON")
     pc_exists "rav1e" && extracommands+=("-DAVIF_CODEC_RAV1E=ON")
@@ -1253,7 +1247,6 @@ if [[ $ffmpeg != no ]] && enabled libxavs && do_pkgConfig "xavs = 0.1." "0.1" &&
     do_make libxavs.a
     for _file in xavs.h libxavs.a xavs.pc; do do_install "$_file"; done
     do_checkIfExist
-    add_to_remove
     unset _file
 fi
 
@@ -1338,7 +1331,6 @@ if [[ $ffmpeg != no ]] && enabled libvidstab &&
     do_uninstall include/vid.stab "${_check[@]}"
     do_cmakeinstall
     do_checkIfExist
-    add_to_remove
 fi
 
 _check=(libzvbi.{h,{l,}a} zvbi-0.2.pc)
@@ -1775,7 +1767,6 @@ fi
 
 _check=(liblensfun.a lensfun.pc lensfun/lensfun.h)
 if [[ $ffmpeg != no ]] && enabled liblensfun &&
-    do_pkgConfig "lensfun = 0.3.95.0" &&
     do_vcs "https://github.com/lensfun/lensfun.git"; then
     do_pacman_install glib2
     grep_or_sed liconv "$MINGW_PREFIX/lib/pkgconfig/glib-2.0.pc" 's;-lintl;& -liconv;g'
@@ -1787,7 +1778,6 @@ if [[ $ffmpeg != no ]] && enabled liblensfun &&
         do_cmakeinstall -DBUILD_STATIC=on -DBUILD_{TESTS,LENSTOOL,DOC}=off \
         -DINSTALL_HELPER_SCRIPTS=off -DCMAKE_INSTALL_DATAROOTDIR="$LOCALDESTDIR/bin-video"
     do_checkIfExist
-    add_to_remove
 fi
 
 _check=(bin-video/vvc/{Encoder,Decoder}App.exe)
@@ -1969,11 +1959,11 @@ if [[ $ffmpeg != no ]]; then
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
         if enabled libsvthevc; then
-            do_patch "https://raw.githubusercontent.com/OpenVisualCloud/SVT-HEVC/master/ffmpeg_plugin/master-0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch" am ||
+            do_patch "https://raw.githubusercontent.com/guojiansheng0925/SVT-HEVC/gjs_enc_cb/ffmpeg_plugin/master-0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch" am ||
                 do_removeOption --enable-libsvthevc
         fi
         if enabled libsvtvp9; then
-            do_patch "https://raw.githubusercontent.com/OpenVisualCloud/SVT-VP9/master/ffmpeg_plugin/master-0001-Add-ability-for-ffmpeg-to-run-svt-vp9.patch" am ||
+            # do_patch "https://raw.githubusercontent.com/OpenVisualCloud/SVT-VP9/master/ffmpeg_plugin/master-0001-Add-ability-for-ffmpeg-to-run-svt-vp9.patch" am ||
                 do_removeOption --enable-libsvtvp9
         fi
 
