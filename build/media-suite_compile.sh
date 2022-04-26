@@ -872,6 +872,7 @@ unset _deps
 _check=(libopenmpt.{a,pc})
 if [[ $ffmpeg != no ]] && enabled libopenmpt &&
     do_vcs "https://github.com/OpenMPT/openmpt.git#tag=libopenmpt-*"; then
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/openmpt/0001-make-try-using-PKG_CONFIG-if-provided.patch" am
     do_uninstall include/libopenmpt "${_check[@]}"
     mkdir bin 2> /dev/null
     extracommands=("CONFIG=mingw64-win${bits%bit}" "AR=ar" "STATIC_LIB=1" "EXAMPLES=0" "OPENMPT123=0"
@@ -1957,6 +1958,9 @@ if [[ $ffmpeg != no ]]; then
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
+
+        do_patch "https://patchwork.ffmpeg.org/project/ffmpeg/patch/20220423233208.27071-1-timo@rothenpieler.org/mbox/" am
+
         if enabled libsvthevc; then
             do_patch "https://raw.githubusercontent.com/guojiansheng0925/SVT-HEVC/gjs_enc_cb/ffmpeg_plugin/master-0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch" am ||
                 do_removeOption --enable-libsvthevc
