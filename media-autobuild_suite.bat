@@ -127,8 +127,9 @@ libopenmpt version3 librav1e libsrt libgsm libvmaf libsvtav1
 set ffmpeg_options_full=chromaprint decklink frei0r libbs2b libcaca ^
 libcdio libflite libfribidi libgme libilbc libsvthevc ^
 #libsvtvp9 libkvazaar libmodplug librist librtmp librubberband #libssh ^
+
 libtesseract libxavs libzmq libzvbi openal libcodec2 ladspa vapoursynth liblensfun ^
-libglslang vulkan libdavs2 libxavs2 libuavs3d libplacebo
+libglslang vulkan libdavs2 libxavs2 libuavs3d libplacebo libjxl
 
 :: options also available with the suite that add shared dependencies
 set ffmpeg_options_full_shared=opencl opengl cuda-nvcc libnpp libopenh264
@@ -149,7 +150,7 @@ set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac exhale ffmbc curl cyanrip2 ^
 rav1e ripgrep dav1d libavif vvc jq dssim avs2 timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc ^
-jo vlc CC jpegxl
+jo vlc CC jpegxl autouploadlogs
 
 set deleteIni=0
 set ini=%build%\media-autobuild_suite.ini
@@ -1291,6 +1292,30 @@ if %loggingF%==2 set "logging=n"
 if %loggingF% GTR 2 GOTO logging
 if %deleteINI%==1 echo.logging=^%loggingF%>>%ini%
 
+:autouploadlogs
+if %autouploadlogsINI%==0 (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Automatically upload error logs to 0x0.st?
+    echo. 1 = Yes [recommended]
+    echo. 2 = No
+    echo.
+    echo This will upload logs.zip to 0x0.st for easy copy and pasting into github
+    echo issues. If you choose no, then uploading logs will be your responsibility and
+    echo no guarantees will be made for issues lacking logs.
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P autouploadlogsF="Upload logs: "
+) else set autouploadlogsF=%autouploadlogsINI%
+
+if "%autouploadlogsF%"=="" GOTO autouploadlogs
+if %autouploadlogsF%==1 set "autouploadlogs=y"
+if %autouploadlogsF%==2 set "autouploadlogs=n"
+if %autouploadlogsF% GTR 2 GOTO autouploadlogs
+if %deleteINI%==1 echo.autouploadlogs=^%autouploadlogsF%>>%ini%
+
 :updateSuite
 if %updateSuiteINI%==0 (
     echo -------------------------------------------------------------------------------
@@ -1666,7 +1691,7 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 --ffmbc=%ffmbc% --curl=%curl% --cyanrip=%cyanrip% --rav1e=%rav1e% --ripgrep=%ripgrep% ^
 --dav1d=%dav1d% --vvc=%vvc% --jq=%jq% --jo=%jo% --dssim=%dssim% --avs2=%avs2% --timeStamp=%timeStamp% ^
 --noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% --svtav1=%svtav1% --svtvp9=%svtvp9% --xvc=%xvc% ^
---vlc=%vlc% --libavif=%libavif% --jpegxl=%jpegxl%
+--vlc=%vlc% --libavif=%libavif% --jpegxl=%jpegxl% --autouploadlogs=%autouploadlogs%
     set "noMintty=%noMintty%"
     if %build64%==yes ( set "MSYSTEM=MINGW64" ) else set "MSYSTEM=MINGW32"
     set "MSYS2_PATH_TYPE=inherit"

@@ -69,6 +69,7 @@ while true; do
     --svtvp9=* ) svtvp9=${1#*=} && shift ;;
     --xvc=* ) xvc=${1#*=} && shift ;;
     --vlc=* ) vlc=${1#*=} && shift ;;
+    --autouploadlogs=* ) autouploadlogs=${1#*=} && shift ;;
     -- ) shift && break ;;
     -* ) echo "Error, unknown option: '$1'." && exit 1 ;;
     * ) break ;;
@@ -412,7 +413,7 @@ mbedtls) _deps=("$MINGW_PREFIX/lib/libmbedtls.a") ;;
 esac
 [[ $standalone = y || $curl != n ]] && _check+=(bin-global/curl.exe)
 if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]] &&
-    do_vcs "https://github.com/curl/curl.git#tag=LATEST"; then
+    do_vcs "https://github.com/curl/curl.git"; then
     do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-curl/0003-libpsl-static-libs.patch"
     do_pacman_install nghttp2
 
@@ -992,9 +993,10 @@ _check=(libvmaf.{a,pc} libvmaf/libvmaf.h)
 if [[ $ffmpeg != no ]] && enabled libvmaf &&
     do_vcs "https://github.com/Netflix/vmaf.git"; then
     do_uninstall share/model "${_check[@]}"
+    do_pacman_install -m vim # for built_in_models
     cd_safe libvmaf
     CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" do_mesoninstall video \
-        -Denable_float=true
+        -Denable_float=true -Dbuilt_in_models=true
     do_checkIfExist
 fi
 file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
@@ -1100,19 +1102,29 @@ if [[ $libavif = y ]] && {
     do_checkIfExist
 fi
 
-_check=(bin-global/{c,d}jxl.exe)
-if [[ $jpegxl = y ]] && do_vcs "https://github.com/libjxl/libjxl.git"; then
+_check=(libjxl{{,_dec,_threads}.a,.pc})
+[[ $jpegxl = y ]] && _check+=(bin-global/{{c,d}jxl{,_ng},cjpeg_hdr,jxlinfo}.exe)
+if { [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; } &&
+    do_vcs "https://github.com/libjxl/libjxl.git"; then
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libjxl/0001-brotli-add-ldflags.patch" am
     do_uninstall "${_check[@]}"
     do_pacman_remove asciidoc-py3-git
     do_pacman_install lcms2 asciidoc
+    extracommands=()
     log -q "git.submodule" git submodule update --init --recursive
-    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS,EXAMPLES}}=OFF \
-        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON \
-        -DJPEGXL_FORCE_SYSTEM_HWY=OFF
+    [[ $jpegxl = y ]] || extracommands=("-DJPEGXL_ENABLE_TOOLS=OFF")
+    do_cmake -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS,EXAMPLES}}=OFF \
+        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON -DJPEGXL_FORCE_SYSTEM_HWY=OFF "${extracommands[@]}"
     do_ninja
-    do_install tools/{c,d}jxl.exe bin-global/
+    do_install {lib/libjxl{,_dec,_threads}-static,third_party/highway/libhwy}.a lib/
+    do_install {lib/libjxl{,_threads},third_party/highway/libhwy}.pc lib/pkgconfig/
+    [[ $jpegxl = y ]] && do_install tools/{{c,d}jxl{,_ng},cjpeg_hdr,jxlinfo}.exe bin-global/
+    mv -f "$LOCALDESTDIR/lib/libjxl-static.a" "$LOCALDESTDIR/lib/libjxl.a"
+    mv -f "$LOCALDESTDIR/lib/libjxl_dec-static.a" "$LOCALDESTDIR/lib/libjxl_dec.a"
+    mv -f "$LOCALDESTDIR/lib/libjxl_threads-static.a" "$LOCALDESTDIR/lib/libjxl_threads.a"
+    grep_or_sed Cflags.private "$(file_installed libjxl.pc)" '/Cflags:/aCflags.private: -DJXL_STATIC_DEFINE'
     do_checkIfExist
+    unset extracommands
 fi
 
 _check=(libkvazaar.{,l}a kvazaar.pc kvazaar.h)
@@ -1805,7 +1817,7 @@ if [[ $ffmpeg != no ]] && enabled avisynth &&
     do_uninstall "${_check[@]}"
     do_cmake -DHEADERS_ONLY=ON
     do_ninja VersionGen
-    do_ninjainstall 
+    do_ninjainstall
     do_checkIfExist
 fi
 
@@ -1958,9 +1970,6 @@ if [[ $ffmpeg != no ]]; then
     if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
-
-        do_patch "https://patchwork.ffmpeg.org/project/ffmpeg/patch/20220423233208.27071-1-timo@rothenpieler.org/mbox/" am
-
         if enabled libsvthevc; then
             do_patch "https://raw.githubusercontent.com/guojiansheng0925/SVT-HEVC/gjs_enc_cb/ffmpeg_plugin/master-0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch" am ||
                 do_removeOption --enable-libsvthevc
