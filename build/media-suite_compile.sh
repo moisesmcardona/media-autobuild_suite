@@ -1832,20 +1832,27 @@ if [[ $bits = 64bit && $uvg266 = y ]] &&
     do_checkIfExist
 fi
 
-_check=(bin-video/vvenc/vvenc{app,FFapp}.exe)
+_check=(bin-video/vvenc{,FF}app.exe
+    vvenc/vvenc.h
+    libvvenc.{a,pc}
+    lib/cmake/vvenc/vvencConfig.cmake
+    libapputils.a)
 if [[ $bits = 64bit && $vvenc = y ]] &&
-    do_vcs "https://github.com/fraunhoferhhi/vvenc.git" vvenc; then
-    do_uninstall bin-video/vvenc
-    do_cmakeinstall -DCMAKE_INSTALL_BINDIR="$LOCALDESTDIR"/bin-video/vvenc \
+    do_vcs "https://github.com/fraunhoferhhi/vvenc.git"; then
+    do_uninstall include/vvenc lib/cmake/vvenc "${_check[@]}"
+    do_cmakeinstall video \
         -DBUILD_STATIC=on
     do_checkIfExist
 fi
 
-_check=(bin-video/vvdec/vvdecapp.exe)
+_check=(bin-video/vvdecapp.exe
+    vvdec/vvdec.h
+    libvvdec.{a,pc}
+    lib/cmake/vvdec/vvdecConfig.cmake)
 if [[ $bits = 64bit && $vvdec = y ]] &&
-    do_vcs "https://github.com/fraunhoferhhi/vvdec.git" vvdec; then
-    do_uninstall bin-video/vvdec
-    do_cmakeinstall -DCMAKE_INSTALL_BINDIR="$LOCALDESTDIR"/bin-video/vvdec \
+    do_vcs "https://github.com/fraunhoferhhi/vvdec.git"; then
+    do_uninstall include/vvdec lib/cmake/vvdec "${_check[@]}"
+    do_cmakeinstall video \
         -DBUILD_STATIC=on
     do_checkIfExist
 fi
