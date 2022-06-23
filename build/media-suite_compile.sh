@@ -536,8 +536,8 @@ unset opencldll
 
 if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
     do_pacman_remove tesseract-ocr
-    _check=(liblept.{,l}a lept.pc)
-    if do_vcs "https://github.com/DanBloomberg/leptonica.git#tag=LATEST"; then
+    _check=(libleptonica.{,l}a lept.pc)
+    if do_vcs "https://github.com/DanBloomberg/leptonica.git"; then
         do_uninstall include/leptonica "${_check[@]}"
         [[ -f configure ]] || do_autogen
         do_separate_confmakeinstall --disable-programs --without-{lib{openjpeg,webp},giflib}
@@ -587,7 +587,7 @@ fi
 
 _check=(zimg{.h,++.hpp} libzimg.{,l}a zimg.pc)
 if [[ $ffmpeg != no ]] && enabled libzimg &&
-    do_vcs "https://github.com/sekrit-twc/zimg.git"; then
+    do_vcs "https://github.com/sekrit-twc/zimg.git#commit=c9a15ec4f86adfef6c7cede8dae79762d34f2564"; then
     do_uninstall "${_check[@]}"
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/zimg/0001-libm_wrapper-define-__CRT__NO_INLINE-before-math.h.patch" am
     do_autoreconf
@@ -875,13 +875,11 @@ unset _deps
 
 _check=(libopenmpt.{a,pc})
 if [[ $ffmpeg != no ]] && enabled libopenmpt &&
-    do_vcs "https://github.com/OpenMPT/openmpt.git#tag=libopenmpt-*"; then
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/openmpt/0001-make-try-using-PKG_CONFIG-if-provided.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/openmpt/0002-mingw-w64.mk-don-t-override-the-compilers-etc-if-pro.patch" am
+    do_vcs "https://github.com/OpenMPT/openmpt.git#branch=OpenMPT-1.30"; then
     do_uninstall include/libopenmpt "${_check[@]}"
     mkdir bin 2> /dev/null
     extracommands=("CONFIG=mingw64-win${bits%bit}" "AR=ar" "STATIC_LIB=1" "EXAMPLES=0" "OPENMPT123=0"
-        "TEST=0" "OS=")
+        "TEST=0" "OS=" "CC=$CC" "CXX=$CXX" "MINGW_COMPILER=${CC##* }")
     log clean make clean "${extracommands[@]}"
     do_makeinstall PREFIX="$LOCALDESTDIR" "${extracommands[@]}"
     sed -i 's/Libs.private.*/& -lrpcrt4 -lstdc++/' "$LOCALDESTDIR/lib/pkgconfig/libopenmpt.pc"
