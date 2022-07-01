@@ -13,7 +13,7 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
-FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --keep-system-cflags --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX")
+FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --keep-system-cflags --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX" "--extra-cxxflags=-fpermissive")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
@@ -587,7 +587,8 @@ fi
 
 _check=(zimg{.h,++.hpp} libzimg.{,l}a zimg.pc)
 if [[ $ffmpeg != no ]] && enabled libzimg &&
-    do_vcs "https://github.com/sekrit-twc/zimg.git#commit=c9a15ec4f86adfef6c7cede8dae79762d34f2564"; then
+    do_vcs "https://github.com/sekrit-twc/zimg.git"; then
+    log -q "git.submodule" git submodule update --init --recursive
     do_uninstall "${_check[@]}"
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/zimg/0001-libm_wrapper-define-__CRT__NO_INLINE-before-math.h.patch" am
     do_autoreconf
@@ -1060,6 +1061,32 @@ if { [[ $rav1e = y ]] || [[ $libavif = y ]] || enabled librav1e; } &&
     do_vcs "https://github.com/xiph/rav1e.git"; then
     do_uninstall "${_check[@]}" include/rav1e
 
+    # attempt at using a version of crossbeam that does not have some breaking changes
+    # ignore if it was already previously cloned
+    log -qe "crossbeam.clone" git clone "https://github.com/crossbeam-rs/crossbeam.git"
+    # before COLLECTOR change
+    log -q "crossbeam.reset" git -C crossbeam reset --hard "08e41e184832f9d0bd49d97e21be1d60c437a894~1"
+
+    # fix no_atomic.rs symlinks
+    for f in $(git -C crossbeam/ ls-files -s | grep no_atomic.rs | awk '/120000/{print $4}'); do
+        rm -f "crossbeam/$f"
+        cp crossbeam/no_atomic.rs "crossbeam/$f"
+    done
+
+    # patch Cargo.toml
+    log -q "crossbeam.patch" git apply --ignore-space-change --ignore-whitespace - <<EOF
+diff --git a/Cargo.toml b/Cargo.toml
+index 922ab034..e61d7064 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -180,3 +180,5 @@ no-default-features = true
+
+ [patch.crates-io]
+ v_frame = { path = "v_frame" }
++crossbeam = { path = "./crossbeam" }
++crossbeam-epoch = { path = "./crossbeam/crossbeam-epoch" }
+EOF
+
     # standalone binary
     if [[ $rav1e = y || $standalone = y ]]; then
         do_rust --no-default-features --features=binaries
@@ -1124,7 +1151,7 @@ if [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; then
 
     _deps=(libhwy.a libgflags.a)
     _check=(libjxl{{,_dec,_threads}.a,.pc} jxl/decode.h)
-    [[ $jpegxl = y ]] && _check+=(bin-global/{{c,d}jxl{,_ng},cjpeg_hdr,jxlinfo}.exe)
+    [[ $jpegxl = y ]] && _check+=(bin-global/{{c,d}jxl,cjpeg_hdr,jxlinfo}.exe bin-global/cjxl_ng.exe)
     if do_vcs "https://github.com/libjxl/libjxl.git"; then
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libjxl/0001-brotli-add-ldflags.patch" am
         do_uninstall "${_check[@]}" include/jxl
@@ -1838,8 +1865,7 @@ _check=(bin-video/vvenc{,FF}app.exe
 if [[ $bits = 64bit && $vvenc = y ]] &&
     do_vcs "https://github.com/fraunhoferhhi/vvenc.git"; then
     do_uninstall include/vvenc lib/cmake/vvenc "${_check[@]}"
-    do_cmakeinstall video \
-        -DBUILD_STATIC=on
+    do_cmakeinstall video -DVVENC_ENABLE_LINK_TIME_OPT=OFF
     do_checkIfExist
 fi
 
@@ -1850,8 +1876,7 @@ _check=(bin-video/vvdecapp.exe
 if [[ $bits = 64bit && $vvdec = y ]] &&
     do_vcs "https://github.com/fraunhoferhhi/vvdec.git"; then
     do_uninstall include/vvdec lib/cmake/vvdec "${_check[@]}"
-    do_cmakeinstall video \
-        -DBUILD_STATIC=on
+    do_cmakeinstall video -DVVDEC_ENABLE_LINK_TIME_OPT=OFF
     do_checkIfExist
 fi
 
