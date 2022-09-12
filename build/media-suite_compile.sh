@@ -222,8 +222,8 @@ if [[ $dssim = y ]] &&
 fi
 
 _check=(libxml2.a libxml2/libxml/xmlIO.h libxml-2.0.pc)
-if { enabled libxml2 || [[ $cyanrip = y ]]; } &&
-    do_vcs "https://gitlab.gnome.org/GNOME/libxml2.git";then
+if { enabled_any libxml2 libbluray || [[ $cyanrip = y ]] || ! mpv_disabled libbluray; } &&
+    do_vcs "https://gitlab.gnome.org/GNOME/libxml2.git"; then
     do_uninstall include/libxml2/libxml "${_check[@]}"
     NOCONFIGURE=true do_autogen
     [[ -f config.mak ]] && log "distclean" make distclean
@@ -231,6 +231,28 @@ if { enabled libxml2 || [[ $cyanrip = y ]]; } &&
     CFLAGS+=" -DLIBXML_STATIC_FOR_DLL -DNOLIBTOOL" \
         do_separate_confmakeinstall --without-python
     do_checkIfExist
+fi
+
+if [[ $ffmpeg != no ]] && enabled libaribb24; then
+    _check=(libpng.{pc,{,l}a} libpng16.{pc,{,l}a} libpng16/png.h)
+    if do_vcs "https://github.com/glennrp/libpng.git"; then
+        do_uninstall include/libpng16 "${_check[@]}"
+        do_autoupdate
+        do_separate_confmakeinstall --with-pic
+        do_checkIfExist
+    fi
+
+    _deps=(libpng.{pc,a} libpng16.{pc,a})
+    _check=(aribb24.pc libaribb24.{,l}a)
+    if do_vcs "https://github.com/nkoriyama/aribb24.git"; then
+        do_patch "https://raw.githubusercontent.com/BtbN/FFmpeg-Builds/master/patches/aribb24/12.patch"
+        do_patch "https://raw.githubusercontent.com/BtbN/FFmpeg-Builds/master/patches/aribb24/13.patch"
+        do_patch "https://raw.githubusercontent.com/BtbN/FFmpeg-Builds/master/patches/aribb24/17.patch"
+        do_uninstall include/aribb24 "${_check[@]}"
+        do_autoreconf
+        do_separate_confmakeinstall --with-pic
+        do_checkIfExist
+    fi
 fi
 
 if [[ $mplayer = y || $mpv = y ]] ||
@@ -426,11 +448,11 @@ if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]] &&
     extra_opts=()
     case $curl in
     libressl|openssl)
-        extra_opts+=(--with-nghttp2 --without-{gnutls,mbedtls})
+        extra_opts+=(--with-{nghttp2,openssl} --without-{gnutls,mbedtls})
         ;;
-    mbedtls) extra_opts+=(--with-{mbedtls,nghttp2}) ;;
-    gnutls) extra_opts+=(--with-gnutls --without-{nghttp2,mbedtls}) ;;
-    *) extra_opts+=(--with-{schannel,winidn,nghttp2} --without-{gnutls,mbedtls});;
+    mbedtls) extra_opts+=(--with-{mbedtls,nghttp2} --without-openssl) ;;
+    gnutls) extra_opts+=(--with-gnutls --without-{nghttp2,mbedtls,openssl}) ;;
+    *) extra_opts+=(--with-{schannel,winidn,nghttp2} --without-{gnutls,mbedtls,openssl});;
     esac
 
     [[ ! -f configure || configure.ac -nt configure ]] &&
