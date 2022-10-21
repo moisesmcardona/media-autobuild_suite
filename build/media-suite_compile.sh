@@ -304,7 +304,7 @@ if [[ $mplayer = y || $mpv = y ]] ||
     _check=(libharfbuzz.a harfbuzz.pc)
     [[ $ffmpeg = sharedlibs ]] && _check+=(libharfbuzz.dll.a bin-video/libharfbuzz-{subset-,}0.dll)
     if do_vcs "https://github.com/harfbuzz/harfbuzz.git"; then
-        do_pacman_install ragel
+        do_pacman_install ragel icu
         do_uninstall include/harfbuzz "${_check[@]}" libharfbuzz{-subset,}.la
         extracommands=(-D{glib,gobject,cairo,icu,tests,introspection,docs,benchmark}"=disabled")
         [[ $ffmpeg = sharedlibs ]] && extracommands+=(--default-library=both)
@@ -2057,6 +2057,9 @@ if [[ $ffmpeg != no ]]; then
         enabled libsvtvp9 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtvp9"
 
         enabled vapoursynth && do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-Add-Alternative-VapourSynth-demuxer.patch" am
+
+        # https://trac.ffmpeg.org/ticket/9981 read_file() conflict
+        enabled libass && do_patch "https://patchwork.ffmpeg.org/project/ffmpeg/patch/20221020071228.8531-1-anton@khirnov.net/mbox/" am
 
         if enabled openal &&
             pc_exists "openal"; then
