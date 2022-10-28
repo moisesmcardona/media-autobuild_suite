@@ -35,6 +35,7 @@ while true; do
     --sox=* ) sox=${1#*=} && shift ;;
     --ffmpeg=* ) ffmpeg=${1#*=} && shift ;;
     --ffmpegUpdate=* ) ffmpegUpdate=${1#*=} && shift ;;
+    --ffmpegPath=* ) ffmpegPath="${1#*=}"; shift ;;
     --ffmpegChoice=* ) ffmpegChoice=${1#*=} && shift ;;
     --mplayer=* ) mplayer=${1#*=} && shift ;;
     --mpv=* ) mpv=${1#*=} && shift ;;
@@ -358,14 +359,13 @@ if [[ $curl = y ]]; then
     [[ $curl = y ]] && curl=schannel
 fi
 _check=(libgnutls.{,l}a gnutls.pc)
-_gnutls_ver=3.7.7
-_gnutls_hash=be9143d0d58eab64dba9b77114aaafac529b6c0d7e81de6bdf1c9b59027d2106
+_gnutls_ver=3.7.8
+_gnutls_hash=c58ad39af0670efe6a8aee5e3a8b2331a1200418b64b7c51977fb396d4617114
 if enabled_any gnutls librtmp || [[ $rtmpdump = y || $curl = gnutls ]] &&
     do_pkgConfig "gnutls = $_gnutls_ver" &&
     do_wget -h $_gnutls_hash \
     "https://www.gnupg.org/ftp/gcrypt/gnutls/v${_gnutls_ver%.*}/gnutls-${_gnutls_ver}.tar.xz"; then
         do_pacman_install nettle
-        do_patch "https://github.com/gnutls/gnutls/commit/88d79b964d88730e316919d6ccd17ca0fe9b3244.patch"
         do_uninstall include/gnutls "${_check[@]}"
         grep_or_sed crypt32 lib/gnutls.pc.in 's/Libs.private.*/& -lcrypt32/'
         CFLAGS="-Wno-int-conversion" \
@@ -1522,7 +1522,7 @@ if [[ $x264 != no ]] ||
         unset_extra_script
         if [[ $standalone = y && $x264 =~ (full|fullv) ]]; then
             _check=("$LOCALDESTDIR"/opt/lightffmpeg/lib/pkgconfig/libav{codec,format}.pc)
-            do_vcs "https://git.ffmpeg.org/ffmpeg.git"
+            do_vcs "$ffmpegPath"
             do_uninstall "$LOCALDESTDIR"/opt/lightffmpeg
             [[ -f config.mak ]] && log "distclean" make distclean
             create_build_dir light
@@ -1619,6 +1619,7 @@ fi
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
 if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git"; then
+    do_patch "https://api.bitbucket.org/2.0/repositories/multicoreware/x265_git/pullrequests/9/patch fix-multibit-builds.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/x265/0001-cmake-split-absolute-library-paths-to-L-and-l.patch" am
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
     [[ $bits = 32bit ]] && assembly=-DENABLE_ASSEMBLY=OFF
@@ -1756,7 +1757,7 @@ if enabled librist && do_vcs "https://code.videolan.org/rist/librist.git"; then
 fi
 
 if  { ! mpv_disabled vapoursynth || enabled vapoursynth; }; then
-    _python_ver=3.10.7
+    _python_ver=3.10.8
     _python_lib=python310
     [[ $bits = 32bit ]] && _arch=win32 || _arch=amd64
     _check=("lib$_python_lib.a")
@@ -2040,7 +2041,7 @@ if [[ $ffmpeg != no ]]; then
     # todo: make this more easily customizable
     [[ $ffmpegUpdate = y ]] && enabled_any lib{aom,tesseract,vmaf,x265,vpx} &&
         _deps=(lib{aom,tesseract,vmaf,x265,vpx}.a)
-    if do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
+    if do_vcs "$ffmpegPath"; then
         do_changeFFmpegConfig "$license"
         [[ -f ffmpeg_extra.sh ]] && source ffmpeg_extra.sh
         if enabled libsvthevc; then
@@ -2057,9 +2058,6 @@ if [[ $ffmpeg != no ]]; then
         enabled libsvtvp9 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtvp9"
 
         enabled vapoursynth && do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-Add-Alternative-VapourSynth-demuxer.patch" am
-
-        # https://trac.ffmpeg.org/ticket/9981 read_file() conflict
-        enabled libass && do_patch "https://patchwork.ffmpeg.org/project/ffmpeg/patch/20221020071228.8531-1-anton@khirnov.net/mbox/" am
 
         if enabled openal &&
             pc_exists "openal"; then
@@ -2235,7 +2233,7 @@ if [[ $mplayer = y ]] && check_mplayer_updates; then
     if [[ ! -d ffmpeg ]] &&
         ! { [[ -d $LOCALBUILDDIR/ffmpeg-git ]] &&
         git clone -q "$LOCALBUILDDIR/ffmpeg-git" ffmpeg; } &&
-        ! git clone "https://git.ffmpeg.org/ffmpeg.git" ffmpeg; then
+        ! git clone "$ffmpegPath" ffmpeg; then
         rm -rf ffmpeg
         printf '%s\n' \
             "Failed to get a FFmpeg checkout" \
@@ -2533,7 +2531,7 @@ if [[ $cyanrip = y ]]; then
     if do_vcs "https://github.com/cyanreg/cyanrip.git"; then
         old_PKG_CONFIG_PATH=$PKG_CONFIG_PATH
         _check=("$LOCALDESTDIR"/opt/cyanffmpeg/lib/pkgconfig/libav{codec,format}.pc)
-        if flavor=cyan do_vcs "https://git.ffmpeg.org/ffmpeg.git"; then
+        if flavor=cyan do_vcs "$ffmpegPath"; then
             do_uninstall "$LOCALDESTDIR"/opt/cyanffmpeg
             [[ -f config.mak ]] && log "distclean" make distclean
             mapfile -t cyan_ffmpeg_opts < <(
