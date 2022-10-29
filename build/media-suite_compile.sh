@@ -13,7 +13,7 @@ if [[ -z $LOCALBUILDDIR ]]; then
     read -r -p "Enter to continue" ret
     exit 1
 fi
-FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --keep-system-cflags --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX" "--extra-cxxflags=-fpermissive")
+FFMPEG_BASE_OPTS=("--pkg-config=pkgconf" --pkg-config-flags="--keep-system-libs --keep-system-cflags --static" "--cc=$CC" "--cxx=$CXX" "--ld=$CXX" "--extra-cxxflags=-fpermissive" "--extra-cflags=-Wno-int-conversion")
 printf '\nBuild start: %(%F %T %z)T\n' -1 >> "$LOCALBUILDDIR/newchangelog"
 
 printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" > "$LOCALBUILDDIR/last_run"
@@ -1619,7 +1619,6 @@ fi
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
 if [[ ! $x265 = n ]] && do_vcs "https://bitbucket.org/multicoreware/x265_git.git"; then
-    do_patch "https://api.bitbucket.org/2.0/repositories/multicoreware/x265_git/pullrequests/9/patch fix-multibit-builds.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/x265/0001-cmake-split-absolute-library-paths-to-L-and-l.patch" am
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
     [[ $bits = 32bit ]] && assembly=-DENABLE_ASSEMBLY=OFF
@@ -1991,18 +1990,20 @@ if [[ $ffmpeg != no ]]; then
             mv -f "$MINGW_PREFIX"/lib/libopenh264.{dll.a.dyn,a}
         fi
         [[ -f $MINGW_PREFIX/lib/libopenh264.dll.a ]] && mv -f "$MINGW_PREFIX"/lib/libopenh264.{dll.,}a
-        if test_newer "$MINGW_PREFIX"/lib/libopenh264.dll.a "$LOCALDESTDIR/bin-video/libopenh264.dll"; then
+        _openh264_ver=2.3.1
+        if test_newer "$MINGW_PREFIX"/lib/libopenh264.dll.a "$LOCALDESTDIR/bin-video/libopenh264.dll" ||
+            ! get_dll_version "$LOCALDESTDIR/bin-video/libopenh264.dll" | grep -q "$_openh264_ver"; then
             pushd "$LOCALDESTDIR/bin-video" >/dev/null || do_exit_prompt "Did you delete the bin-video folder?"
             if [[ $bits = 64bit ]]; then
-              _sha256=fd5c4c08418d7478d575760d54ff5d5670bbaa9636ab282ada625fa1fd5c7742
+              _sha256=3d5bc8ce7a57f956f445f9aa98015d49c59623d89d78a9139ed8728ed853e197
             else
-              _sha256=6e97a72bf2ef0766eeebad61b9aaf66275bc02246eadbfdd685e170b6507951e
+              _sha256=7e9c5a31b2e1dbd1265bb96c6a6c8813c0de8d593b5a0b2476e316f27c280be7
             fi
             do_wget -c -r -q -h $_sha256 \
-            "http://ciscobinary.openh264.org/openh264-2.3.0-win${bits%bit}.dll.bz2" \
+            "http://ciscobinary.openh264.org/openh264-${_openh264_ver}-win${bits%bit}.dll.bz2" \
                 libopenh264.dll.bz2
-            [[ -f libopenh264.dll.bz2 ]] && bunzip2 libopenh264.dll.bz2
-            unset _sha256
+            [[ -f libopenh264.dll.bz2 ]] && bunzip2 -f libopenh264.dll.bz2
+            unset _sha256 _openh264_ver
             popd >/dev/null || do_exit_prompt "Did you delete the previous folder?"
         fi
     fi
@@ -2252,7 +2253,7 @@ if [[ $mplayer = y ]] && check_mplayer_updates; then
 
     _notrequired=true
     do_configure --bindir="$LOCALDESTDIR"/bin-video \
-    --extra-cflags='-fpermissive -DPTW32_STATIC_LIB -O3 -DMODPLUG_STATIC' \
+    --extra-cflags='-fpermissive -DPTW32_STATIC_LIB -O3 -DMODPLUG_STATIC -Wno-int-conversion' \
     --extra-libs="-llzma -liconv -lws2_32 -lpthread -lwinpthread -lpng -lwinmm $($PKG_CONFIG --libs libilbc) \
         $(enabled vapoursynth && $PKG_CONFIG --libs vapoursynth-script)" \
     --extra-ldflags='-Wl,--allow-multiple-definition' --enable-{static,runtime-cpudetection} \
@@ -2432,7 +2433,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         fi
 
         extra_script pre configure
-        CFLAGS+=" ${mpv_cflags[*]}" LDFLAGS+=" ${mpv_ldflags[*]}" \
+        CFLAGS+=" ${mpv_cflags[*]} -Wno-int-conversion" LDFLAGS+=" ${mpv_ldflags[*]}" \
             RST2MAN="${MINGW_PREFIX}/bin/rst2man" \
             RST2HTML="${MINGW_PREFIX}/bin/rst2html" \
             RST2PDF="${MINGW_PREFIX}/bin/rst2pdf2" \
