@@ -460,7 +460,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]] &&
     esac
 
     [[ ! -f configure || configure.ac -nt configure ]] &&
-        log autogen ./buildconf
+        do_autoreconf
     [[ $curl = openssl ]] && hide_libressl
     hide_conflicting_libs
     CPPFLAGS+=" -DGNUTLS_INTERNAL_BUILD -DNGHTTP2_STATICLIB -DPSL_STATIC" \
@@ -492,6 +492,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
     _deps=(libglut.a)
     _check=(libtiff{.a,-4.pc})
     if do_vcs "https://gitlab.com/libtiff/libtiff.git"; then
+        do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/233.patch" am
         do_pacman_install libjpeg-turbo xz zlib zstd libdeflate
         do_uninstall "${_check[@]}"
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
